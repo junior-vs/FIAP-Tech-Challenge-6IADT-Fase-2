@@ -1,10 +1,10 @@
-import pygame
 import sys
-import numpy as np
-import random
 from typing import List, Tuple
+import random
 import math
 import os
+import pygame
+import numpy as np
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../domain')))
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../functions')))
 from delivery_point import DeliveryPoint
