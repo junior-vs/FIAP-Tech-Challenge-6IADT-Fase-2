@@ -88,16 +88,7 @@ class TSPGeneticAlgorithm:
         if self.delivery_points:
             self.calculate_distance_matrix()
     
-    def calculate_distance_matrix(self):
-        """Calcula a matriz de distâncias entre todos os pontos de entrega"""
-        n = len(self.delivery_points)
-        self.distance_matrix = np.zeros((n, n))
 
-        for i in range(n):
-            for j in range(n):
-                if i != j:
-                    distance = self.delivery_points[i].distancia_pura(self.delivery_points[j])
-                    self.distance_matrix[i][j] = distance
     
     def initialize_population(self):
         """Inicializa a população com cromossomos aleatórios"""
@@ -162,6 +153,12 @@ class TSPGeneticAlgorithm:
             return Mutation.mutacao_por_embaralhamento(route)
         return route.copy()
     
+
+    def calculate_distance_matrix(self):
+        """Calcula a matriz de distâncias entre todos os pontos de entrega"""
+        # Delega o cálculo para DeliveryPoint
+        self.distance_matrix = DeliveryPoint.compute_distance_matrix(self.delivery_points)
+
     def run_generation(self):
         """Executa uma geração do algoritmo genético"""
         if not self.population:
