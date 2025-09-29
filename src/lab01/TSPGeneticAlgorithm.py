@@ -13,6 +13,7 @@ from route import Route
 from crossover_function import Crossover
 from mutation_function import Mutation
 from selection_functions import Selection
+from fitness_function import FitnessFunction
 
 # Inicializar pygame
 pygame.init()
@@ -50,7 +51,7 @@ class TSPGeneticAlgorithm:
         self.elitism = True
         self.running_algorithm = False
         self.current_generation = 0
-        self.best_chromosome = None
+        self.best_route = None
         self.best_fitness = 0
         self.fitness_history = []
         self.mean_fitness_history = []
@@ -101,14 +102,6 @@ class TSPGeneticAlgorithm:
             random.shuffle(shuffled)
             self.population.append(Route(shuffled))
     
-    def calculate_fitness(self, route: Route) -> float:
-        """Calcula o fitness de uma Route (1 / distancia_total).
-
-        Returns 0 for empty or zero-distance (avoid division by zero).
-        """
-        total_distance = route.distancia_total()
-        return 1.0 / total_distance if total_distance > 0 else 0
-    
     def selection(self, population: List[Route], fitness_scores: List[float]) -> List[Route]:
         """Seleção por roleta (retorna nova população de Route).
 
@@ -126,7 +119,7 @@ class TSPGeneticAlgorithm:
             new_population.append(chosen.copy())
 
         # Elitismo - manter o melhor cromossomo
-        if self.elitism and self.best_chromosome:
+        if self.elitism and self.best_route:
             best_idx = fitness_scores.index(max(fitness_scores))
             new_population[-1] = population[best_idx].copy()
 
@@ -165,14 +158,14 @@ class TSPGeneticAlgorithm:
             return
 
         # Calcular fitness de toda a população (population is List[Route])
-        fitness_scores = [self.calculate_fitness(ind) for ind in self.population]
+        fitness_scores = [FitnessFunction.calculate_fitness(ind) for ind in self.population]
 
         # Atualizar melhor cromossomo
         max_fitness = max(fitness_scores)
         if max_fitness > self.best_fitness:
             self.best_fitness = max_fitness
             best_idx = fitness_scores.index(max_fitness)
-            self.best_chromosome = self.population[best_idx].copy()
+            self.best_route = self.population[best_idx].copy()
 
         # Armazenar histórico
         self.fitness_history.append(max_fitness)
@@ -300,7 +293,7 @@ class TSPGeneticAlgorithm:
         self.running_algorithm = True
         self.current_generation = 0
         self.best_fitness = 0
-        self.best_chromosome = None
+        self.best_route = None
         self.fitness_history = []
         self.mean_fitness_history = []
         self.initialize_population()
@@ -316,7 +309,7 @@ class TSPGeneticAlgorithm:
         self.population = []
         self.current_generation = 0
         self.best_fitness = 0
-        self.best_chromosome = None
+        self.best_route = None
         self.fitness_history = []
         self.mean_fitness_history = []
     
@@ -348,12 +341,12 @@ class TSPGeneticAlgorithm:
             # Desenhar cidades e rotas
             if self.delivery_points:
                 # Desenhar melhor rota
-                if self.best_chromosome:
-                    DrawFunctions.draw_route(self, self.best_chromosome, RED, 3)
+                if self.best_route:
+                    DrawFunctions.draw_route(self, self.best_route, RED, 3)
 
                 # Desenhar rota da geração atual
                 if self.population and self.running_algorithm:
-                    fitness_scores = [self.calculate_fitness(chrom) for chrom in self.population]
+                    fitness_scores = [FitnessFunction.calculate_fitness(chrom) for chrom in self.population]
                     if fitness_scores:
                         best_idx = fitness_scores.index(max(fitness_scores))
                         current_best = self.population[best_idx]

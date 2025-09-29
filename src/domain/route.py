@@ -53,36 +53,6 @@ class Route:
             total += ponto_a.distancia_euclidean(ponto_b)
         return total
 
-    # === ETAPA : IMPLEMENTAÇÃO DOS OPERADORES DE MUTAÇÃO ===
     def __repr__(self) -> str:
         return f"Route({self.delivery_points})"
 
-    def mutacao_por_troca(self) -> "Route":
-        """Troca a posição de dois pontos de entrega aleatórios na Route.
-
-        Retorna uma nova instância :class:`Route` com os pontos trocados.
-        """
-        mutated_individual = self.delivery_points[:]
-        idx1, idx2 = random.sample(range(len(mutated_individual)), 2)
-        mutated_individual[idx1], mutated_individual[idx2] = (
-            mutated_individual[idx2], mutated_individual[idx1]
-        )
-        return Route(mutated_individual)
-
-    def mutacao_por_inversao(self) -> "Route":
-        """Inverte uma subsequência aleatória da Route e retorna nova Route."""
-        mutated_individual = self.delivery_points[:]
-        start, end = sorted(random.sample(range(len(mutated_individual)), 2))
-        sub_sequence = mutated_individual[start:end]
-        sub_sequence.reverse()
-        mutated_individual[start:end] = sub_sequence
-        return Route(mutated_individual)
-
-    def mutacao_por_embaralhamento(self) -> "Route":
-        """Embaralha uma subsequência aleatória da rota e retorna nova Rota."""
-        mutated_individual = self.delivery_points[:]
-        start, end = sorted(random.sample(range(len(mutated_individual)), 2))
-        sub_sequence = mutated_individual[start:end]
-        random.shuffle(sub_sequence)
-        mutated_individual[start:end] = sub_sequence
-        return Route(mutated_individual)
