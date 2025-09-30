@@ -21,14 +21,14 @@ pygame.init()
 
 # Constantes
 WINDOW_WIDTH = 1200
-WINDOW_HEIGHT = 800
+WINDOW_HEIGHT = 900
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
 BLUE = (0, 0, 255)
 RED = (255, 0, 0)
-GREEN = (0, 255, 0)
-GRAY = (128, 128, 128)
-LIGHT_GRAY = (200, 200, 200)
+#GREEN = (0, 255, 0)
+
+
 
 
 class TSPGeneticAlgorithm:
@@ -201,13 +201,7 @@ class TSPGeneticAlgorithm:
         # Trim to population size and advance generation
         self.population = new_population[:self.population_size]
         self.current_generation += 1
-    
-    
-    
-    
-    
-    
-   
+      
     
     def handle_custom_input(self, pos):
         """Permite ao usuário clicar para adicionar cidades customizadas (usa lógica reduzida)."""
@@ -252,6 +246,15 @@ class TSPGeneticAlgorithm:
                 # Botão Elitism
                 elif self.buttons['toggle_elitism'].collidepoint(pos):
                     self.elitism = not self.elitism
+
+                # Controles de número de cidades
+                elif self.buttons['cities_minus'].collidepoint(pos) and not self.running_algorithm:
+                    if self.num_cities > 3:  # Mínimo de 3 cidades
+                        self.num_cities -= 1
+
+                elif self.buttons['cities_plus'].collidepoint(pos) and not self.running_algorithm:
+                    if self.num_cities < 50:  # Máximo de 50 cidades
+                        self.num_cities += 1
 
                 # Botões de método de mutação
                 elif self.buttons['mutation_swap'].collidepoint(pos):

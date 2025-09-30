@@ -22,19 +22,22 @@ class DrawFunctions:
             'map_random': pygame.Rect(50, 100, 80, 25),
             'map_circle': pygame.Rect(140, 100, 80, 25),
             'map_custom': pygame.Rect(230, 100, 80, 25),
-            'toggle_elitism': pygame.Rect(50, 150, 120, 30),
+            # Controles de número de cidades
+            'cities_minus': pygame.Rect(50, 130, 25, 25),
+            'cities_plus': pygame.Rect(290, 130, 25, 25),
+            'toggle_elitism': pygame.Rect(50, 170, 120, 30),
             # Botões para métodos de mutação
-            'mutation_swap': pygame.Rect(50, 200, 60, 25),
-            'mutation_inverse': pygame.Rect(115, 200, 60, 25),
-            'mutation_shuffle': pygame.Rect(180, 200, 60, 25),
+            'mutation_swap': pygame.Rect(50, 220, 60, 25),
+            'mutation_inverse': pygame.Rect(115, 220, 60, 25),
+            'mutation_shuffle': pygame.Rect(180, 220, 60, 25),
             # Botões para métodos de crossover
-            'crossover_pmx': pygame.Rect(50, 250, 50, 25),
-            'crossover_ox1': pygame.Rect(105, 250, 50, 25),
-            'crossover_cx': pygame.Rect(160, 250, 50, 25),
-            'crossover_kpoint': pygame.Rect(215, 250, 50, 25),
-            'crossover_erx': pygame.Rect(270, 250, 50, 25),
-            'run_algorithm': pygame.Rect(50, 300, 120, 30),
-            'stop_algorithm': pygame.Rect(180, 300, 120, 30),
+            'crossover_pmx': pygame.Rect(50, 270, 50, 25),
+            'crossover_ox1': pygame.Rect(105, 270, 50, 25),
+            'crossover_cx': pygame.Rect(160, 270, 50, 25),
+            'crossover_kpoint': pygame.Rect(215, 270, 50, 25),
+            'crossover_erx': pygame.Rect(270, 270, 50, 25),
+            'run_algorithm': pygame.Rect(50, 320, 120, 30),
+            'stop_algorithm': pygame.Rect(180, 320, 120, 30),
         }
 
     @staticmethod
@@ -87,33 +90,80 @@ class DrawFunctions:
     @staticmethod
     def draw_fitness_graph(app: Any) -> None:
         """Desenha um gráfico simples do histórico de fitness (usa app.fitness_history)."""
-        graph_rect = pygame.Rect(20, 550, 320, 200)
+        # Define a área do gráfico na tela
+        graph_rect = pygame.Rect(20, 600, 320, 200)
+        
+        # Desenha o fundo branco do gráfico
         pygame.draw.rect(app.screen, WHITE, graph_rect)
+        # Desenha a borda preta do gráfico
         pygame.draw.rect(app.screen, BLACK, graph_rect, 2)
+        
+        # Renderiza e posiciona o título do gráfico
         title = app.font.render("Fitness History", True, BLACK)
         app.screen.blit(title, (graph_rect.x + 10, graph_rect.y - 25))
-        if len(app.fitness_history) < 2:
+        
+        # Verifica se temos dados suficientes para desenhar o gráfico
+        if not hasattr(app, 'fitness_history') or len(app.fitness_history) < 2:
             return
-        max_fitness = max(app.fitness_history)
-        min_fitness = min(app.fitness_history)
+        
+        # Verifica se existe o atributo mean_fitness_history, se não, cria como lista vazia
+        if not hasattr(app, 'mean_fitness_history'):
+            app.mean_fitness_history = []
+        
+        # Garante que ambas as listas tenham o mesmo tamanho
+        min_length = min(len(app.fitness_history), len(app.mean_fitness_history))
+        if min_length < 2:
+            return
+        
+        # Calcula os valores máximo e mínimo para normalização do gráfico
+        # Considera tanto fitness máximo quanto médio para a escala
+        all_values = list(app.fitness_history[:min_length]) + list(app.mean_fitness_history[:min_length])
+        max_fitness = max(all_values)
+        min_fitness = min(all_values)
+        
+        # Se todos os valores são iguais, não há o que plotar
         if max_fitness == min_fitness:
             return
-        points_max = []
-        points_mean = []
-        for i, (max_f, mean_f) in enumerate(zip(app.fitness_history, app.mean_fitness_history)):
-            x = graph_rect.x + (i / max(1, len(app.fitness_history)-1)) * graph_rect.width
+        
+        # Listas para armazenar os pontos do gráfico
+        points_max = []  # Pontos para o fitness máximo
+        points_mean = [] # Pontos para o fitness médio
+        
+        # Gera os pontos para plotagem
+        for i in range(min_length):
+            max_f = app.fitness_history[i]
+            mean_f = app.mean_fitness_history[i]
+            
+            # Calcula a posição X baseada no índice da geração
+            x = graph_rect.x + (i / max(1, min_length - 1)) * graph_rect.width
+            
+            # Calcula a posição Y para o fitness máximo (normalizada)
             y_max = graph_rect.bottom - ((max_f - min_fitness) / (max_fitness - min_fitness)) * graph_rect.height
+            
+            # Calcula a posição Y para o fitness médio (normalizada)
             y_mean = graph_rect.bottom - ((mean_f - min_fitness) / (max_fitness - min_fitness)) * graph_rect.height
+            
+            # Adiciona os pontos às listas
             points_max.append((x, y_max))
             points_mean.append((x, y_mean))
+        
+        # Desenha a linha do fitness máximo (vermelha)
         if len(points_max) > 1:
             pygame.draw.lines(app.screen, RED, False, points_max, 2)
+        
+        # Desenha a linha do fitness médio (verde)
         if len(points_mean) > 1:
             pygame.draw.lines(app.screen, GREEN, False, points_mean, 2)
+        
+        # Desenha a legenda abaixo do gráfico
         legend_y = graph_rect.bottom + 10
+        
+        # Linha vermelha da legenda para fitness máximo
         pygame.draw.line(app.screen, RED, (graph_rect.x, legend_y), (graph_rect.x + 20, legend_y), 2)
         text = app.small_font.render("Max Fitness", True, BLACK)
         app.screen.blit(text, (graph_rect.x + 25, legend_y - 8))
+        
+        # Linha verde da legenda para fitness médio
         pygame.draw.line(app.screen, GREEN, (graph_rect.x + 120, legend_y), (graph_rect.x + 140, legend_y), 2)
         text = app.small_font.render("Mean Fitness", True, BLACK)
         app.screen.blit(text, (graph_rect.x + 145, legend_y - 8))
@@ -122,7 +172,7 @@ class DrawFunctions:
     def draw_interface(app: Any) -> None:
         """Desenha a interface do usuário (controles, botões, parâmetros)."""
         # fundo controles
-        pygame.draw.rect(app.screen, LIGHT_GRAY, (10, 10, 350, 780))
+        pygame.draw.rect(app.screen, LIGHT_GRAY, (10, 10, 350, 800))
         title = app.font.render("TSP - Genetic Algorithm", True, BLACK)
         app.screen.blit(title, (20, 20))
         button_color = WHITE if not app.running_algorithm else GRAY
@@ -158,6 +208,32 @@ class DrawFunctions:
         text = app.small_font.render(f"Elitism: {'On' if app.elitism else 'Off'}", True, BLACK)
         app.screen.blit(text, (app.buttons['toggle_elitism'].x + 10, app.buttons['toggle_elitism'].y + 5))
         
+        # Controles de número de cidades
+        cities_label = app.small_font.render("Number of Cities:", True, BLACK)
+        app.screen.blit(cities_label, (50, 135))
+        
+        # Botão menos
+        pygame.draw.rect(app.screen, WHITE, app.buttons['cities_minus'])
+        pygame.draw.rect(app.screen, BLACK, app.buttons['cities_minus'], 2)
+        minus_text = app.font.render("-", True, BLACK)
+        minus_rect = minus_text.get_rect(center=app.buttons['cities_minus'].center)
+        app.screen.blit(minus_text, minus_rect)
+        
+        # Campo do número atual
+        cities_display = pygame.Rect(80, 130, 205, 25)
+        pygame.draw.rect(app.screen, WHITE, cities_display)
+        pygame.draw.rect(app.screen, BLACK, cities_display, 2)
+        cities_text = app.font.render(f"Cities: {app.num_cities}", True, BLACK)
+        cities_text_rect = cities_text.get_rect(center=cities_display.center)
+        app.screen.blit(cities_text, cities_text_rect)
+        
+        # Botão mais
+        pygame.draw.rect(app.screen, WHITE, app.buttons['cities_plus'])
+        pygame.draw.rect(app.screen, BLACK, app.buttons['cities_plus'], 2)
+        plus_text = app.font.render("+", True, BLACK)
+        plus_rect = plus_text.get_rect(center=app.buttons['cities_plus'].center)
+        app.screen.blit(plus_text, plus_rect)
+        
         # Botões de método de mutação
         mutation_methods = [
             ('mutation_swap', 'Swap', 'swap'),
@@ -167,7 +243,7 @@ class DrawFunctions:
 
         # Label para métodos de mutação
         mutation_label = app.small_font.render("Mutation Method:", True, BLACK)
-        app.screen.blit(mutation_label, (50, 180))
+        app.screen.blit(mutation_label, (50, 200))
 
         for btn_name, label, method in mutation_methods:
             color = GREEN if app.mutation_method == method else WHITE
@@ -188,7 +264,7 @@ class DrawFunctions:
 
         # Label para métodos de crossover
         crossover_label = app.small_font.render("Crossover Method:", True, BLACK)
-        app.screen.blit(crossover_label, (50, 230))
+        app.screen.blit(crossover_label, (50, 250))
 
         for btn_name, label, method in crossover_methods:
             color = GREEN if app.crossover_method == method else WHITE
@@ -198,7 +274,7 @@ class DrawFunctions:
             text_rect = text.get_rect(center=app.buttons[btn_name].center)
             app.screen.blit(text, text_rect)
         # info texts
-        y_offset = 650
+        y_offset = 450
         info_texts = [
             f"Cities: {len(app.delivery_points)}",
             f"Population: {app.population_size}",
@@ -209,7 +285,7 @@ class DrawFunctions:
             rendered = app.font.render(text, True, BLACK)
             app.screen.blit(rendered, (20, y_offset + i * 30))
         # parameters
-        y_offset = 500
+        y_offset = 350
         param_texts = [
             "Parameters:",
             f"Mutation Method: {app.mutation_method.upper()}",
