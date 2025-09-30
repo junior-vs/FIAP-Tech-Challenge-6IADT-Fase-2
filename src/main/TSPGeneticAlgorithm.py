@@ -131,7 +131,9 @@ class TSPGeneticAlgorithm:
         By default uses OX1 that returns two children.
         """
         # Use the two-child ordered crossover implementation
-        child1, child2 = Crossover.crossover_ordenado_ox1(parent1, parent2)
+        child1, child2 = Crossover.crossover_parcialmente_mapeado_pmx(parent1, parent2)
+        #child1 = Crossover.erx_crossover(parent1, parent2)
+        #child2 = Crossover.erx_crossover(parent2, parent1)
         return child1, child2
     
     def mutate(self, route: Route, mutation_rate: float) -> Route:
@@ -155,7 +157,7 @@ class TSPGeneticAlgorithm:
     def run_generation(self):
         """Executa uma geração do algoritmo genético"""
         if not self.population:
-            return
+            self.initialize_population()
 
         # Calcular fitness de toda a população (population is List[Route])
         fitness_scores = [FitnessFunction.calculate_fitness(ind) for ind in self.population]

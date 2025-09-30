@@ -1,3 +1,4 @@
+import re
 from typing import Tuple, Optional, List, Dict, Set
 import random
 from route import Route
@@ -74,6 +75,7 @@ class Crossover:
 
     @staticmethod
     def crossover_ordenado_ox1(parent1: Route, parent2: Route) -> Tuple[Route, Route]:
+        """Ordered Crossover (OX1). Retorna dois filhos. Se tamanho < 2, retorna cópias dos pais."""
         parent_a_points = parent1.delivery_points
         parent_b_points = parent2.delivery_points
         size = len(parent_a_points)
@@ -101,36 +103,6 @@ class Crossover:
 
         return Route(child1), Route(child2)
 
-    @staticmethod
-    def crossover_parcialmente_mapeado_pmx(parent1: Route, parent2: Route) -> Tuple[Route, Route]:
-        parent_a_points = parent1.delivery_points
-        parent_b_points = parent2.delivery_points
-        size = len(parent_a_points)
-        if size < 2:
-            return parent1.copy(), parent2.copy()
-        child1 = parent_a_points[:]
-        child2 = parent_b_points[:]
-        start, end = sorted(random.sample(range(size), 2))
-
-        mapping1 = {}
-        mapping2 = {}
-        for i in range(start, end):
-            child1[i], child2[i] = parent_b_points[i], parent_a_points[i]
-            mapping1[child1[i]] = child2[i]
-            mapping2[child2[i]] = child1[i]
-
-        def repair(child, mapping):
-            for i in range(size):
-                if not (start <= i < end):
-                    val = child[i]
-                    while val in child[start:end]:
-                        val = mapping.get(val, val)
-                    child[i] = val
-            return child
-
-        child1 = repair(child1, mapping2)
-        child2 = repair(child2, mapping1)
-        return Route(child1), Route(child2)
 
     @staticmethod
     def crossover_de_ciclo_cx(parent1: Route, parent2: Route) -> Tuple[Route, Route]:
@@ -195,4 +167,62 @@ class Crossover:
         child1 = fill_gaps(child1, parent_b_points)
         child2 = fill_gaps(child2, parent_a_points)
         return Route(child1), Route(child2)
+
+    @staticmethod
+    def crossover_parcialmente_mapeado_pmx(parent1: Route, parent2: Route) -> Tuple[Route, Route]:
+        """
+        Implementa o Crossover Parcialmente Mapeado (PMX) para o TSP.
+        Garante que a ordem e a posição absoluta de uma subsequência sejam preservadas.
+        """
+    
+        parent_a_points = parent1.delivery_points
+        parent_b_points = parent2.delivery_points
+        size = len(parent_a_points)
+        
+        # Caso trivial: se o tamanho for menor que 2, retorna cópias dos pais
+        if size < 2:
+            return parent1.copy(), parent2.copy()
+        
+        child1 = parent_a_points[:]
+        child2 = parent_b_points[:]
+        start, end = sorted(random.sample(range(size), 2))
+
+        # 2. Segmento de Troca e Construção dos Mapeamentos
+        mapping1 = {}  # Para reparar child1: mapeia P2 -> P1
+        mapping2 = {}  # Para reparar child2: mapeia P1 -> P2
+
+        for i in range(start, end):
+            gene_a = parent_a_points[i]
+            gene_b = parent_b_points[i]
+
+            # Trocar os genes no segmento
+            child1[i], child2[i] = gene_b, gene_a
+            
+            # Construir os mapeamentos para resolver conflitos
+            mapping1[gene_b] = gene_a  # child1 recebeu gene_b, mas se houver duplicata, substituir por gene_a
+            mapping2[gene_a] = gene_b  # child2 recebeu gene_a, mas se houver duplicata, substituir por gene_b
+
+        # 3. Função de Reparo (Corrige Duplicatas fora do segmento)
+        def repair(child, mapping):
+            for i in range(size):
+                if not (start <= i < end):  # Fora do segmento trocado
+                    val = child[i]
+
+                    # Enquanto o valor (val) for uma chave no dicionário de mapeamento,
+                    # significa que ele deve ser substituído pelo seu correspondente.
+                    # Isso segue a cadeia de mapeamento (o coração do PMX).
+                    while val in mapping:
+                        val = mapping[val]
+                    child[i] = val
+            return child
+
+        # 4. Chamada de Reparo
+        child1 = repair(child1, mapping1)  # C1 recebe o segmento P2 e é reparado pelo mapa P2 -> P1
+        child2 = repair(child2, mapping2)  # C2 recebe o segmento P1 e é reparado pelo mapa P1 -> P2
+
+        return Route(child1), Route(child2)
+        
+    
+            # 3. Resolução de Conflitos para child1
+
 
