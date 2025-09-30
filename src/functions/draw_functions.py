@@ -23,14 +23,16 @@ class DrawFunctions:
             'map_circle': pygame.Rect(140, 100, 80, 25),
             'map_custom': pygame.Rect(230, 100, 80, 25),
             'toggle_elitism': pygame.Rect(50, 150, 120, 30),
-            'mutation_rate_min_inc': pygame.Rect(50, 200, 30, 30),
-            'mutation_rate_min_dec': pygame.Rect(85, 200, 30, 30),
-            'mutation_rate_max_inc': pygame.Rect(130, 200, 30, 30),
-            'mutation_rate_max_dec': pygame.Rect(165, 200, 30, 30),
-            'crossover_rate_min_inc': pygame.Rect(50, 250, 30, 30),
-            'crossover_rate_min_dec': pygame.Rect(85, 250, 30, 30),
-            'crossover_rate_max_inc': pygame.Rect(130, 250, 30, 30),
-            'crossover_rate_max_dec': pygame.Rect(165, 250, 30, 30),
+            # Botões para métodos de mutação
+            'mutation_swap': pygame.Rect(50, 200, 60, 25),
+            'mutation_inverse': pygame.Rect(115, 200, 60, 25),
+            'mutation_shuffle': pygame.Rect(180, 200, 60, 25),
+            # Botões para métodos de crossover
+            'crossover_pmx': pygame.Rect(50, 250, 50, 25),
+            'crossover_ox1': pygame.Rect(105, 250, 50, 25),
+            'crossover_cx': pygame.Rect(160, 250, 50, 25),
+            'crossover_kpoint': pygame.Rect(215, 250, 50, 25),
+            'crossover_erx': pygame.Rect(270, 250, 50, 25),
             'run_algorithm': pygame.Rect(50, 300, 120, 30),
             'stop_algorithm': pygame.Rect(180, 300, 120, 30),
         }
@@ -155,31 +157,46 @@ class DrawFunctions:
         pygame.draw.rect(app.screen, BLACK, app.buttons['toggle_elitism'], 2)
         text = app.small_font.render(f"Elitism: {'On' if app.elitism else 'Off'}", True, BLACK)
         app.screen.blit(text, (app.buttons['toggle_elitism'].x + 10, app.buttons['toggle_elitism'].y + 5))
-        # compact: only draw +/- buttons labels (rest preserved in main app logic)
-        pygame.draw.rect(app.screen, WHITE, app.buttons['mutation_rate_min_inc'])
-        pygame.draw.rect(app.screen, BLACK, app.buttons['mutation_rate_min_inc'], 2)
-        app.screen.blit(app.small_font.render("+", True, BLACK), (app.buttons['mutation_rate_min_inc'].x + 7, app.buttons['mutation_rate_min_inc'].y + 5))
-        pygame.draw.rect(app.screen, WHITE, app.buttons['mutation_rate_min_dec'])
-        pygame.draw.rect(app.screen, BLACK, app.buttons['mutation_rate_min_dec'], 2)
-        app.screen.blit(app.small_font.render("-", True, BLACK), (app.buttons['mutation_rate_min_dec'].x + 7, app.buttons['mutation_rate_min_dec'].y + 5))
-        pygame.draw.rect(app.screen, WHITE, app.buttons['mutation_rate_max_inc'])
-        pygame.draw.rect(app.screen, BLACK, app.buttons['mutation_rate_max_inc'], 2)
-        app.screen.blit(app.small_font.render("+", True, BLACK), (app.buttons['mutation_rate_max_inc'].x + 7, app.buttons['mutation_rate_max_inc'].y + 5))
-        pygame.draw.rect(app.screen, WHITE, app.buttons['mutation_rate_max_dec'])
-        pygame.draw.rect(app.screen, BLACK, app.buttons['mutation_rate_max_dec'], 2)
-        app.screen.blit(app.small_font.render("-", True, BLACK), (app.buttons['mutation_rate_max_dec'].x + 7, app.buttons['mutation_rate_max_dec'].y + 5))
-        pygame.draw.rect(app.screen, WHITE, app.buttons['crossover_rate_min_inc'])
-        pygame.draw.rect(app.screen, BLACK, app.buttons['crossover_rate_min_inc'], 2)
-        app.screen.blit(app.small_font.render("+", True, BLACK), (app.buttons['crossover_rate_min_inc'].x + 7, app.buttons['crossover_rate_min_inc'].y + 5))
-        pygame.draw.rect(app.screen, WHITE, app.buttons['crossover_rate_min_dec'])
-        pygame.draw.rect(app.screen, BLACK, app.buttons['crossover_rate_min_dec'], 2)
-        app.screen.blit(app.small_font.render("-", True, BLACK), (app.buttons['crossover_rate_min_dec'].x + 7, app.buttons['crossover_rate_min_dec'].y + 5))
-        pygame.draw.rect(app.screen, WHITE, app.buttons['crossover_rate_max_inc'])
-        pygame.draw.rect(app.screen, BLACK, app.buttons['crossover_rate_max_inc'], 2)
-        app.screen.blit(app.small_font.render("+", True, BLACK), (app.buttons['crossover_rate_max_inc'].x + 7, app.buttons['crossover_rate_max_inc'].y + 5))
-        pygame.draw.rect(app.screen, WHITE, app.buttons['crossover_rate_max_dec'])
-        pygame.draw.rect(app.screen, BLACK, app.buttons['crossover_rate_max_dec'], 2)
-        app.screen.blit(app.small_font.render("-", True, BLACK), (app.buttons['crossover_rate_max_dec'].x + 7, app.buttons['crossover_rate_max_dec'].y + 5))
+        
+        # Botões de método de mutação
+        mutation_methods = [
+            ('mutation_swap', 'Swap', 'swap'),
+            ('mutation_inverse', 'Inverse', 'inverse'),
+            ('mutation_shuffle', 'Shuffle', 'shuffle')
+        ]
+
+        # Label para métodos de mutação
+        mutation_label = app.small_font.render("Mutation Method:", True, BLACK)
+        app.screen.blit(mutation_label, (50, 180))
+
+        for btn_name, label, method in mutation_methods:
+            color = GREEN if app.mutation_method == method else WHITE
+            pygame.draw.rect(app.screen, color, app.buttons[btn_name])
+            pygame.draw.rect(app.screen, BLACK, app.buttons[btn_name], 2)
+            text = app.small_font.render(label, True, BLACK)
+            text_rect = text.get_rect(center=app.buttons[btn_name].center)
+            app.screen.blit(text, text_rect)
+        
+        # Botões de método de crossover
+        crossover_methods = [
+            ('crossover_pmx', 'PMX', 'pmx'),
+            ('crossover_ox1', 'OX1', 'ox1'),
+            ('crossover_cx', 'CX', 'cx'),
+            ('crossover_kpoint', 'K-Pt', 'kpoint'),
+            ('crossover_erx', 'ERX', 'erx')
+        ]
+
+        # Label para métodos de crossover
+        crossover_label = app.small_font.render("Crossover Method:", True, BLACK)
+        app.screen.blit(crossover_label, (50, 230))
+
+        for btn_name, label, method in crossover_methods:
+            color = GREEN if app.crossover_method == method else WHITE
+            pygame.draw.rect(app.screen, color, app.buttons[btn_name])
+            pygame.draw.rect(app.screen, BLACK, app.buttons[btn_name], 2)
+            text = app.small_font.render(label, True, BLACK)
+            text_rect = text.get_rect(center=app.buttons[btn_name].center)
+            app.screen.blit(text, text_rect)
         # info texts
         y_offset = 650
         info_texts = [
@@ -195,8 +212,8 @@ class DrawFunctions:
         y_offset = 500
         param_texts = [
             "Parameters:",
-            f"Mutation Rate: {app.mutation_rate_min:.2f} - {app.mutation_rate_max:.2f}",
-            f"Crossover Rate: {app.crossover_rate_min:.2f} - {app.crossover_rate_max:.2f}",
+            f"Mutation Method: {app.mutation_method.upper()}",
+            f"Crossover Method: {app.crossover_method.upper()}",
             f"Elitism: {'On' if app.elitism else 'Off'}"
         ]
         for i, text in enumerate(param_texts):

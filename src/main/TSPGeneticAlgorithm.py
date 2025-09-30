@@ -44,10 +44,8 @@ class TSPGeneticAlgorithm:
         self.population = []  # will hold List[Route] after initialization
         self.population_size = 50
         self.max_generations = 100
-        self.mutation_rate_min = 0.01
-        self.mutation_rate_max = 0.1
-        self.crossover_rate_min = 0.05
-        self.crossover_rate_max = 0.8
+        self.mutation_method = "swap"  # Default method: swap
+        self.crossover_method = "pmx"  # Default method: PMX
         self.elitism = True
         self.running_algorithm = False
         self.current_generation = 0
@@ -126,27 +124,36 @@ class TSPGeneticAlgorithm:
         return new_population
     
     def crossover(self, parent1: Route, parent2: Route) -> Tuple[Route, Route]:
-        """Wrapper that uses the domain Crossover implementations.
-
-        By default uses OX1 that returns two children.
-        """
-        # Use the two-child ordered crossover implementation
-        child1, child2 = Crossover.crossover_parcialmente_mapeado_pmx(parent1, parent2)
-        #child1 = Crossover.erx_crossover(parent1, parent2)
-        #child2 = Crossover.erx_crossover(parent2, parent1)
-        return child1, child2
+        """Wrapper que usa as implementações de Crossover baseado no método selecionado."""
+        
+        if self.crossover_method == "pmx":
+            return Crossover.crossover_parcialmente_mapeado_pmx(parent1, parent2)
+        elif self.crossover_method == "ox1":
+            return Crossover.crossover_ordenado_ox1(parent1, parent2)
+        elif self.crossover_method == "cx":
+            return Crossover.crossover_de_ciclo_cx(parent1, parent2)
+        elif self.crossover_method == "kpoint":
+            return Crossover.crossover_multiplos_pontos_kpoint(parent1, parent2, k=2)
+        elif self.crossover_method == "erx":
+            # ERX retorna um filho, então criamos dois chamando duas vezes
+            child1 = Crossover.erx_crossover(parent1, parent2)
+            child2 = Crossover.erx_crossover(parent2, parent1)
+            return child1, child2
+        else:
+            # Fallback para PMX
+            return Crossover.crossover_parcialmente_mapeado_pmx(parent1, parent2)
     
-    def mutate(self, route: Route, mutation_rate: float) -> Route:
-        """Apply a mutation operator from Mutation module to a Route."""
-        if random.random() < mutation_rate:
-            # choose one mutation style at random to diversify
-            choice = random.choice(["swap", "inverse", "shuffle"])
-            if choice == "swap":
-                return Mutation.mutacao_por_troca(route)
-            if choice == "inverse":
-                return Mutation.mutacao_por_inversao(route)
+    def mutate(self, route: Route) -> Route:
+        """Apply a mutation operator from Mutation module to a Route based on selected method."""
+        if self.mutation_method == "swap":
+            return Mutation.mutacao_por_troca(route)
+        elif self.mutation_method == "inverse":
+            return Mutation.mutacao_por_inversao(route)
+        elif self.mutation_method == "shuffle":
             return Mutation.mutacao_por_embaralhamento(route)
-        return route.copy()
+        else:
+            # Fallback para swap
+            return Mutation.mutacao_por_troca(route)
     
 
     def calculate_distance_matrix(self):
@@ -179,22 +186,15 @@ class TSPGeneticAlgorithm:
         # Crossover e mutação
         new_population = []
 
-        # Taxa de mutação e crossover variáveis
-        progress = self.current_generation / max(1, self.max_generations)
-        current_mutation_rate = self.mutation_rate_max - (self.mutation_rate_max - self.mutation_rate_min) * progress
-        current_crossover_rate = self.crossover_rate_max - (self.crossover_rate_max - self.crossover_rate_min) * progress
-
         for i in range(0, len(self.population), 2):
             parent1 = self.population[i]
             parent2 = self.population[(i + 1) % len(self.population)]
 
-            if random.random() < current_crossover_rate:
-                child1, child2 = self.crossover(parent1, parent2)
-            else:
-                child1, child2 = parent1.copy(), parent2.copy()
+            # Sempre aplicar crossover - usuário escolhe apenas o método
+            child1, child2 = self.crossover(parent1, parent2)
 
-            child1 = self.mutate(child1, current_mutation_rate)
-            child2 = self.mutate(child2, current_mutation_rate)
+            child1 = self.mutate(child1)
+            child2 = self.mutate(child2)
 
             new_population.extend([child1, child2])
 
@@ -253,23 +253,25 @@ class TSPGeneticAlgorithm:
                 elif self.buttons['toggle_elitism'].collidepoint(pos):
                     self.elitism = not self.elitism
 
-                # Botões Mutation/Crossover
-                elif self.buttons['mutation_rate_min_inc'].collidepoint(pos):
-                    self.mutation_rate_min = min(self.mutation_rate_min + 0.01, 1.0)
-                elif self.buttons['mutation_rate_min_dec'].collidepoint(pos):
-                    self.mutation_rate_min = max(self.mutation_rate_min - 0.01, 0.0)
-                elif self.buttons['mutation_rate_max_inc'].collidepoint(pos):
-                    self.mutation_rate_max = min(self.mutation_rate_max + 0.01, 1.0)
-                elif self.buttons['mutation_rate_max_dec'].collidepoint(pos):
-                    self.mutation_rate_max = max(self.mutation_rate_max - 0.01, 0.0)
-                elif self.buttons['crossover_rate_min_inc'].collidepoint(pos):
-                    self.crossover_rate_min = min(self.crossover_rate_min + 0.01, 1.0)
-                elif self.buttons['crossover_rate_min_dec'].collidepoint(pos):
-                    self.crossover_rate_min = max(self.crossover_rate_min - 0.01, 0.0)
-                elif self.buttons['crossover_rate_max_inc'].collidepoint(pos):
-                    self.crossover_rate_max = min(self.crossover_rate_max + 0.01, 1.0)
-                elif self.buttons['crossover_rate_max_dec'].collidepoint(pos):
-                    self.crossover_rate_max = max(self.crossover_rate_max - 0.01, 0.0)
+                # Botões de método de mutação
+                elif self.buttons['mutation_swap'].collidepoint(pos):
+                    self.mutation_method = "swap"
+                elif self.buttons['mutation_inverse'].collidepoint(pos):
+                    self.mutation_method = "inverse"
+                elif self.buttons['mutation_shuffle'].collidepoint(pos):
+                    self.mutation_method = "shuffle"
+
+                # Botões de método de crossover
+                elif self.buttons['crossover_pmx'].collidepoint(pos):
+                    self.crossover_method = "pmx"
+                elif self.buttons['crossover_ox1'].collidepoint(pos):
+                    self.crossover_method = "ox1"
+                elif self.buttons['crossover_cx'].collidepoint(pos):
+                    self.crossover_method = "cx"
+                elif self.buttons['crossover_kpoint'].collidepoint(pos):
+                    self.crossover_method = "kpoint"
+                elif self.buttons['crossover_erx'].collidepoint(pos):
+                    self.crossover_method = "erx"
 
                 # Modo customizado - adicionar cidade
                 elif self.map_type == "custom":
