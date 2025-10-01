@@ -1,12 +1,17 @@
 import numpy as np
 from scipy.spatial.distance import euclidean
 import math
-from typing import List
+from typing import List, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    # Import only for type checking to avoid any potential circular imports at runtime
+    from product import Product
 
 class DeliveryPoint:
-    def __init__(self, x: float, y: float):
+    def __init__(self, x: float, y: float, product: "Product"):
         self.x = x
         self.y = y
+        self.product = product
 
     def distancia_np(self, other: "DeliveryPoint") -> float:
         # Usando numpy
@@ -36,8 +41,9 @@ class DeliveryPoint:
             for j in range(n):
                 if i == j:
                     continue
-                mat[i, j] = points[i].distancia_pura(points[j])
+                mat[i, j] = points[i].distancia_euclidean(points[j])
         return mat
 
     def __repr__(self):
-        return f"Delivery Point (x={self.x}, y={self.y})"
+        pname = getattr(self.product, "name", None)
+        return f"Delivery Point (x={self.x}, y={self.y}, product={pname})"

@@ -1,6 +1,6 @@
 # Created by https://www.toptal.com/developers/gitignore/api/python,venv,visualstudiocode,pycharm+all,dotenv
 # Edit at https://www.toptal.com/developers/gitignore?templates=python,venv,visualstudiocode,pycharm+all,dotenv
-
+.log
 ### dotenv ###
 .env
 

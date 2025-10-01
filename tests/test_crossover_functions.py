@@ -2,20 +2,24 @@ import sys
 import os
 import random
 
+# ensure domain is importable BEFORE imports
+root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, os.path.join(root, 'src', 'domain'))
+sys.path.insert(0, os.path.join(root, 'src', 'functions'))
+
 from delivery_point import DeliveryPoint
 from route import Route
 from crossover_function import Crossover
-
-# ensure domain is importable
-root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-sys.path.insert(0, os.path.join(root, 'src', 'domain'))
+from product import Product
+from product import Product
 
 
 def make_points(n=6):
     # generate n points on a circle for variety
     pts = []
     for i in range(n):
-        pts.append(DeliveryPoint(i * 10, (i % 2) * 5))
+        prod = Product(name=f"P{i}", weight=100, length=10, width=10, height=10)
+        pts.append(DeliveryPoint(i * 10, (i % 2) * 5, product=prod))
     return pts
 
 

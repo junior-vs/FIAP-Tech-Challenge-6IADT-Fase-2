@@ -21,6 +21,7 @@ from selection_functions import Selection
 from fitness_function import FitnessFunction
 from ui_layout import UILayout
 from app_logging import configurar_logging, get_logger
+from product import Product
 
 # Inicializar pygame
 pygame.init()
@@ -80,6 +81,32 @@ class TSPGeneticAlgorithm:
         self.buttons = UILayout.Buttons.create_button_positions()
         
         self.logger.info("Aplicação inicializada com sucesso")
+    def _make_random_product(self, idx: int) -> Product:
+        """Gera um produto válido aleatório respeitando as restrições.
+
+        - Cada lado <= 100 cm; soma <= 200 cm; peso <= 10000 g.
+        """
+        # Nome simples baseado no índice
+        name = f"Produto-{idx}"
+        # Peso entre 100 g e 10000 g
+        weight = random.randint(100, 10_000)
+        # Gerar dimensões: escolha dois lados aleatórios e derive o terceiro para respeitar soma
+        for _ in range(100):
+            a = random.uniform(5.0, 100.0)
+            b = random.uniform(5.0, 100.0)
+            max_c = min(100.0, 200.0 - (a + b))
+            if max_c > 5.0:
+                c = random.uniform(5.0, max_c)
+                # aleatorizar a ordem (C, L, A)
+                dims = [a, b, c]
+                random.shuffle(dims)
+                try:
+                    return Product(name=name, weight=weight,
+                                   length=dims[0], width=dims[1], height=dims[2])
+                except ValueError:
+                    continue
+        # fallback seguro: dimensões fixas válidas
+        return Product(name=name, weight=min(weight, 10_000), length=100, width=50, height=50)
         
     
     
@@ -90,10 +117,11 @@ class TSPGeneticAlgorithm:
 
         if map_type == "random":
             # Usar área definida no layout centralizado
-            for _ in range(num_cities):
+            for i in range(num_cities):
                 x = random.randint(UILayout.MapArea.RANDOM_MIN_X, UILayout.MapArea.RANDOM_MAX_X)
                 y = random.randint(UILayout.MapArea.RANDOM_MIN_Y, UILayout.MapArea.RANDOM_MAX_Y)
-                self.delivery_points.append(DeliveryPoint(x, y))
+                prod = self._make_random_product(i)
+                self.delivery_points.append(DeliveryPoint(x, y, product=prod))
 
         elif map_type == "circle":
             # Usar configurações centralizadas para círculo
@@ -104,7 +132,8 @@ class TSPGeneticAlgorithm:
                 angle = 2 * math.pi * i / num_cities
                 x = center_x + radius * math.cos(angle)
                 y = center_y + radius * math.sin(angle)
-                self.delivery_points.append(DeliveryPoint(int(x), int(y)))
+                prod = self._make_random_product(i)
+                self.delivery_points.append(DeliveryPoint(int(x), int(y), product=prod))
 
         elif map_type == "custom":
             # Modo customizado será implementado no método handle_custom_input
@@ -200,7 +229,7 @@ class TSPGeneticAlgorithm:
             self.initialize_population()
 
         # Calcular fitness de toda a população (population is List[Route])
-        fitness_scores = [FitnessFunction.calculate_fitness(ind) for ind in self.population]
+        fitness_scores = [FitnessFunction.calculate_fitness_with_constraints(ind) for ind in self.population]
 
         # Atualizar melhor rota
         max_fitness = max(fitness_scores)
@@ -252,7 +281,8 @@ class TSPGeneticAlgorithm:
             # Garantir que o clique está dentro da área válida
             if (UILayout.MapArea.CITIES_X <= pos[0] <= UILayout.MapArea.CITIES_X + UILayout.MapArea.CITIES_WIDTH and
                 UILayout.MapArea.CITIES_Y <= pos[1] <= UILayout.MapArea.CITIES_Y + UILayout.MapArea.CITIES_HEIGHT):
-                self.delivery_points.append(DeliveryPoint(pos[0], pos[1]))
+                prod = self._make_random_product(len(self.delivery_points))
+                self.delivery_points.append(DeliveryPoint(pos[0], pos[1], product=prod))
                 if len(self.delivery_points) > 1:
                     self.calculate_distance_matrix()
     
@@ -429,7 +459,7 @@ class TSPGeneticAlgorithm:
 
                 # Desenhar rota da geração atual
                 if self.population and self.running_algorithm:
-                    fitness_scores = [FitnessFunction.calculate_fitness(chrom) for chrom in self.population]
+                    fitness_scores = [FitnessFunction.calculate_fitness_with_constraints(chrom) for chrom in self.population]
                     if fitness_scores:
                         best_idx = fitness_scores.index(max(fitness_scores))
                         current_best = self.population[best_idx]

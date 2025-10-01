@@ -1,21 +1,29 @@
 import sys
 import os
 import pytest
+
+# ensure domain and functions are importable BEFORE imports
+root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, os.path.join(root, 'src', 'domain'))
+sys.path.insert(0, os.path.join(root, 'src', 'functions'))
+from product import Product
+
 from delivery_point import DeliveryPoint
 from route import Route
 from crossover_function import Crossover
 from mutation_function import Mutation
 from selection_functions import Selection
 
-# ensure domain and functions are importable
-root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-sys.path.insert(0, os.path.join(root, 'src', 'domain'))
-sys.path.insert(0, os.path.join(root, 'src', 'functions'))
-
 
 def make_square_points():
-    # Return 4 points forming a unit square
-    return [DeliveryPoint(0,0), DeliveryPoint(0,1), DeliveryPoint(1,1), DeliveryPoint(1,0)]
+    # Return 4 points forming a unit square, each with a minimal product
+    base_prod = Product(name="Unit", weight=100, length=10, width=10, height=10)
+    return [
+        DeliveryPoint(0, 0, product=base_prod),
+        DeliveryPoint(0, 1, product=base_prod),
+        DeliveryPoint(1, 1, product=base_prod),
+        DeliveryPoint(1, 0, product=base_prod),
+    ]
 
 
 def test_route_distance_and_copy():
