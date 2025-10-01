@@ -14,19 +14,23 @@ from crossover_function import Crossover
 from mutation_function import Mutation
 from selection_functions import Selection
 from fitness_function import FitnessFunction
+from ui_layout import UILayout
 
 # Inicializar pygame
 pygame.init()
 
+# Usar configurações centralizadas do layout
+WINDOW_WIDTH = UILayout.WINDOW_WIDTH
+WINDOW_HEIGHT = UILayout.WINDOW_HEIGHT
 
-# Constantes
-WINDOW_WIDTH = 1200
-WINDOW_HEIGHT = 900
-WHITE = (255, 255, 255)
-BLACK = (0, 0, 0)
-BLUE = (0, 0, 255)
-RED = (255, 0, 0)
-#GREEN = (0, 255, 0)
+# Importar cores do layout centralizado
+WHITE = UILayout.get_color('white')
+BLACK = UILayout.get_color('black')
+BLUE = UILayout.get_color('blue')
+RED = UILayout.get_color('red')
+GREEN = UILayout.get_color('green')
+GRAY = UILayout.get_color('gray')
+LIGHT_GRAY = UILayout.get_color('light_gray')
 
 
 
@@ -36,8 +40,12 @@ class TSPGeneticAlgorithm:
         self.screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
         pygame.display.set_caption("TSP - Genetic Algorithm Approach")
         self.clock = pygame.time.Clock()
-        self.font = pygame.font.Font(None, 24)
-        self.small_font = pygame.font.Font(None, 18)
+        
+        # Usar fontes centralizadas
+        fonts = UILayout.create_fonts()
+        self.font = fonts['large']
+        self.small_font = fonts['medium']
+        
         # Variáveis do algoritmo
         self.delivery_points: List[DeliveryPoint] = []
         self.distance_matrix = None
@@ -54,26 +62,29 @@ class TSPGeneticAlgorithm:
         self.fitness_history = []
         self.mean_fitness_history = []
 
-        # Interface
+        # Interface - usar layout centralizado
         self.map_type = "random"  # "random", "circle", "custom"
         self.num_cities = 10
-        self.buttons = DrawFunctions.create_buttons()
+        self.buttons = UILayout.Buttons.create_button_positions()
         
     
     
     def generate_cities(self, map_type: str, num_cities: int = 10):
-        """Gera cidades baseado no tipo de mapa selecionado"""
+        """Gera cidades baseado no tipo de mapa selecionado usando configurações centralizadas."""
         self.delivery_points = []
 
         if map_type == "random":
+            # Usar área definida no layout centralizado
             for _ in range(num_cities):
-                x = random.randint(400, 900)
-                y = random.randint(100, 600)
+                x = random.randint(UILayout.MapArea.RANDOM_MIN_X, UILayout.MapArea.RANDOM_MAX_X)
+                y = random.randint(UILayout.MapArea.RANDOM_MIN_Y, UILayout.MapArea.RANDOM_MAX_Y)
                 self.delivery_points.append(DeliveryPoint(x, y))
 
         elif map_type == "circle":
-            center_x, center_y = 650, 350
-            radius = 200
+            # Usar configurações centralizadas para círculo
+            center_x = UILayout.MapArea.CIRCLE_CENTER_X
+            center_y = UILayout.MapArea.CIRCLE_CENTER_Y
+            radius = UILayout.MapArea.CIRCLE_RADIUS
             for i in range(num_cities):
                 angle = 2 * math.pi * i / num_cities
                 x = center_x + radius * math.cos(angle)
@@ -204,11 +215,14 @@ class TSPGeneticAlgorithm:
       
     
     def handle_custom_input(self, pos):
-        """Permite ao usuário clicar para adicionar cidades customizadas (usa lógica reduzida)."""
-        if self.map_type == "custom" and pos[0] > 370:
-            self.delivery_points.append(DeliveryPoint(pos[0], pos[1]))
-            if len(self.delivery_points) > 1:
-                self.calculate_distance_matrix()
+        """Permite ao usuário clicar para adicionar cidades customizadas usando área definida no layout."""
+        if self.map_type == "custom" and pos[0] > UILayout.MapArea.X:
+            # Garantir que o clique está dentro da área válida
+            if (UILayout.MapArea.CITIES_X <= pos[0] <= UILayout.MapArea.CITIES_X + UILayout.MapArea.CITIES_WIDTH and
+                UILayout.MapArea.CITIES_Y <= pos[1] <= UILayout.MapArea.CITIES_Y + UILayout.MapArea.CITIES_HEIGHT):
+                self.delivery_points.append(DeliveryPoint(pos[0], pos[1]))
+                if len(self.delivery_points) > 1:
+                    self.calculate_distance_matrix()
     
     def handle_events(self):
         """Gerencia eventos do pygame"""
@@ -338,9 +352,10 @@ class TSPGeneticAlgorithm:
             # Desenhar tudo
             self.screen.fill(WHITE)
             
-            # Área do mapa
-            pygame.draw.rect(self.screen, WHITE, (370, 10, 820, 780))
-            pygame.draw.rect(self.screen, BLACK, (370, 10, 820, 780), 2)
+            # Área do mapa usando configurações centralizadas
+            map_rect = (UILayout.MapArea.X, UILayout.MapArea.Y, UILayout.MapArea.WIDTH, UILayout.MapArea.HEIGHT)
+            pygame.draw.rect(self.screen, WHITE, map_rect)
+            pygame.draw.rect(self.screen, BLACK, map_rect, 2)
             
             # Desenhar interface via DrawFunctions
             DrawFunctions.draw_interface(self)
@@ -361,10 +376,11 @@ class TSPGeneticAlgorithm:
 
                 DrawFunctions.draw_cities(self)
 
-            # Instruções para modo customizado
+            # Instruções para modo customizado usando posição centralizada
             if self.map_type == "custom" and not self.delivery_points:
                 instruction = self.font.render("Click on the map to add cities", True, BLACK)
-                self.screen.blit(instruction, (400, 400))
+                self.screen.blit(instruction, (UILayout.SpecialElements.CUSTOM_MESSAGE_X, 
+                                             UILayout.SpecialElements.CUSTOM_MESSAGE_Y))
             
             pygame.display.flip()
             self.clock.tick(60)  # 60 FPS
