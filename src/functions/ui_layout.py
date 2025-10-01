@@ -37,7 +37,7 @@ class UILayout:
         X = 10
         Y = 10
         WIDTH = 350
-        HEIGHT = 800
+        HEIGHT = 880
         
         # Margens internas
         MARGIN_LEFT = 20
@@ -50,10 +50,11 @@ class UILayout:
         MAP_TYPES_Y = 100
         CITY_COUNT_Y = 130
         ELITISM_Y = 170
-        MUTATION_METHODS_Y = 220
-        CROSSOVER_METHODS_Y = 270
-        PARAMETERS_INFO_Y = 350
-        ALGORITHM_INFO_Y = 450
+        SELECTION_METHODS_Y = 210
+        MUTATION_METHODS_Y = 250
+        CROSSOVER_METHODS_Y = 300
+        PARAMETERS_INFO_Y = 380
+        ALGORITHM_INFO_Y = 480
         FITNESS_GRAPH_Y = 600
     
     # =============================================================================
@@ -134,6 +135,18 @@ class UILayout:
             )
             
             # =========================================================================
+            # BOTÕES DE MÉTODOS DE SELEÇÃO (Roulette, Tournament, Rank)
+            # =========================================================================
+            selection_x = main_buttons_x
+            selection_methods = ['selection_roulette', 'selection_tournament', 'selection_rank']
+            for i, method in enumerate(selection_methods):
+                buttons[method] = pygame.Rect(
+                    selection_x + i * (btn.SMALL_WIDTH + btn.HORIZONTAL_SPACING), 
+                    cp.SELECTION_METHODS_Y,
+                    btn.SMALL_WIDTH, btn.SMALL_HEIGHT
+                )
+            
+            # =========================================================================
             # BOTÕES DE MÉTODOS DE MUTAÇÃO (Swap, Inverse, Shuffle)
             # =========================================================================
             mutation_x = main_buttons_x
@@ -180,7 +193,7 @@ class UILayout:
         X = 370  # Começa após o painel de controles
         Y = 10
         WIDTH = 820  # WINDOW_WIDTH - X - margem
-        HEIGHT = 780
+        HEIGHT = 880
         
         # Área onde as cidades podem ser colocadas (com margem interna)
         CITIES_MARGIN = 30
@@ -207,7 +220,7 @@ class UILayout:
         X = 20  # ControlPanel.MARGIN_LEFT
         Y = 600  # ControlPanel.FITNESS_GRAPH_Y
         WIDTH = 320
-        HEIGHT = 200
+        HEIGHT = 250
         
         # Posições da legenda
         LEGEND_Y_OFFSET = 10
@@ -230,8 +243,9 @@ class UILayout:
         
         # Posições específicas para labels
         CITY_COUNT_LABEL_Y = 135  # ControlPanel.CITY_COUNT_Y + 5
-        MUTATION_LABEL_Y = 200   # ControlPanel.MUTATION_METHODS_Y - 20
-        CROSSOVER_LABEL_Y = 250  # ControlPanel.CROSSOVER_METHODS_Y - 20
+        SELECTION_LABEL_Y = 190   # ControlPanel.SELECTION_METHODS_Y - 20
+        MUTATION_LABEL_Y = 230    # ControlPanel.MUTATION_METHODS_Y - 20
+        CROSSOVER_LABEL_Y = 280   # ControlPanel.CROSSOVER_METHODS_Y - 20
     
     # =============================================================================
     # ELEMENTOS ESPECIAIS

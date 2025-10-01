@@ -54,6 +54,7 @@ class TSPGeneticAlgorithm:
         self.max_generations = 100
         self.mutation_method = "swap"  # Default method: swap
         self.crossover_method = "pmx"  # Default method: PMX
+        self.selection_method = "roulette"  # Default method: roulette
         self.elitism = True
         self.running_algorithm = False
         self.current_generation = 0
@@ -63,6 +64,7 @@ class TSPGeneticAlgorithm:
         self.mean_fitness_history = []
 
         # Interface - usar layout centralizado
+        self.ui_layout = UILayout()
         self.map_type = "random"  # "random", "circle", "custom"
         self.num_cities = 10
         self.buttons = UILayout.Buttons.create_button_positions()
@@ -98,8 +100,6 @@ class TSPGeneticAlgorithm:
         if self.delivery_points:
             self.calculate_distance_matrix()
     
-
-    
     def initialize_population(self):
         """Inicializa a população com cromossomos aleatórios"""
         self.population = []
@@ -112,24 +112,32 @@ class TSPGeneticAlgorithm:
             self.population.append(Route(shuffled))
     
     def selection(self, population: List[Route], fitness_scores: List[float]) -> List[Route]:
-        """Seleção por roleta (retorna nova população de Route).
-
-        Falls back to using Selection.roulette for clarity.
-        """
-        # If all fitness scores are zero, return a shallow copy
+        """Seleção usando métodos do selection_functions.py com suporte a diferentes algoritmos e elitismo."""
+        # Verificação de segurança para evitar erros
         total_fitness = sum(fitness_scores)
         if total_fitness == 0:
             return population.copy()
 
-        # Use Selection.roulette which expects aptitudes list
+        # Selecionar método de seleção baseado na configuração
         new_population = []
         for _ in range(len(population)):
-            chosen = Selection.roulette(population, fitness_scores)
+            if self.selection_method == "roulette":
+                chosen = Selection.roulette(population, fitness_scores)
+            elif self.selection_method == "tournament":
+                # Usar tamanho de torneio padrão de 3
+                chosen = Selection.tournament(population, fitness_scores, tournament_size=3)
+            elif self.selection_method == "rank":
+                chosen = Selection.rank(population, fitness_scores)
+            else:
+                # Fallback para roleta
+                chosen = Selection.roulette(population, fitness_scores)
+            
             new_population.append(chosen.copy())
 
-        # Elitismo - manter o melhor cromossomo
+        # Aplicar elitismo - preservar o melhor indivíduo da geração atual
         if self.elitism and self.best_route:
             best_idx = fitness_scores.index(max(fitness_scores))
+            # Substitui o último indivíduo da nova população pelo melhor da atual
             new_population[-1] = population[best_idx].copy()
 
         return new_population
@@ -180,7 +188,7 @@ class TSPGeneticAlgorithm:
         # Calcular fitness de toda a população (population is List[Route])
         fitness_scores = [FitnessFunction.calculate_fitness(ind) for ind in self.population]
 
-        # Atualizar melhor cromossomo
+        # Atualizar melhor rota
         max_fitness = max(fitness_scores)
         if max_fitness > self.best_fitness:
             self.best_fitness = max_fitness
@@ -260,6 +268,17 @@ class TSPGeneticAlgorithm:
                 # Botão Elitism
                 elif self.buttons['toggle_elitism'].collidepoint(pos):
                     self.elitism = not self.elitism
+
+                # Botões de método de seleção
+                elif 'selection_roulette' in self.buttons and \
+                     self.buttons['selection_roulette'].collidepoint(pos):
+                    self.selection_method = "roulette"
+                elif 'selection_tournament' in self.buttons and \
+                     self.buttons['selection_tournament'].collidepoint(pos):
+                    self.selection_method = "tournament"
+                elif 'selection_rank' in self.buttons and \
+                     self.buttons['selection_rank'].collidepoint(pos):
+                    self.selection_method = "rank"
 
                 # Controles de número de cidades
                 elif self.buttons['cities_minus'].collidepoint(pos) and not self.running_algorithm:

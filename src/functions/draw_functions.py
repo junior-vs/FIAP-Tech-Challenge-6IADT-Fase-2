@@ -178,6 +178,9 @@ class DrawFunctions:
         # Desenha o botão de toggle do elitismo
         DrawFunctions._draw_elitism_button(app)
         
+        # Desenha os botões de seleção de método de seleção
+        DrawFunctions._draw_selection_method_buttons(app)
+        
         # Desenha os botões de seleção de método de mutação
         DrawFunctions._draw_mutation_method_buttons(app)
         
@@ -255,8 +258,8 @@ class DrawFunctions:
     def _draw_city_count_controls(app: Any) -> None:
         """Desenha os controles para alterar o número de cidades."""
         # Label explicativo usando configurações centralizadas
-        cities_label = app.small_font.render("Number of Cities:", True, BLACK)
-        app.screen.blit(cities_label, (UILayout.ControlPanel.MARGIN_LEFT + 30, UILayout.Text.CITY_COUNT_LABEL_Y))
+       # cities_label = app.small_font.render("Number of Cities:", True, BLACK)
+       # app.screen.blit(cities_label, (UILayout.ControlPanel.MARGIN_LEFT + 30, UILayout.Text.CITY_COUNT_LABEL_Y))
         
         # Botão de diminuir (-) - só funciona se não estiver executando algoritmo
         button_color = WHITE if not app.running_algorithm else GRAY
@@ -293,6 +296,32 @@ class DrawFunctions:
         pygame.draw.rect(app.screen, BLACK, app.buttons['toggle_elitism'], 2)
         text = app.small_font.render(f"Elitism: {'On' if app.elitism else 'Off'}", True, BLACK)
         app.screen.blit(text, (app.buttons['toggle_elitism'].x + 10, app.buttons['toggle_elitism'].y + 5))
+
+    @staticmethod
+    def _draw_selection_method_buttons(app: Any) -> None:
+        """Desenha os botões de seleção de método de seleção."""
+        # Define os métodos de seleção disponíveis
+        selection_methods = [
+            ('selection_roulette', 'Roleta', 'roulette'),
+            ('selection_tournament', 'Torneio', 'tournament'),
+            ('selection_rank', 'Ranking', 'rank')
+        ]
+
+        # Label explicativo usando configurações centralizadas
+        selection_label = app.small_font.render("Selection Method:", True, BLACK)
+        app.screen.blit(selection_label, (UILayout.ControlPanel.MARGIN_LEFT + 30, UILayout.Text.SELECTION_LABEL_Y))
+
+        # Desenha cada botão de método de seleção
+        for btn_name, label, method in selection_methods:
+            if btn_name in app.buttons:
+                button_rect = app.buttons[btn_name]
+                # Destaca o método atualmente selecionado em azul
+                color = BLUE if app.selection_method == method else WHITE
+                pygame.draw.rect(app.screen, color, button_rect)
+                pygame.draw.rect(app.screen, BLACK, button_rect, 2)
+                text = app.small_font.render(label, True, BLACK)
+                text_rect = text.get_rect(center=button_rect.center)
+                app.screen.blit(text, text_rect)
 
     @staticmethod
     def _draw_mutation_method_buttons(app: Any) -> None:
