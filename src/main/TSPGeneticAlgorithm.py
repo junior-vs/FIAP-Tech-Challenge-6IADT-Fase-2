@@ -5,8 +5,13 @@ import math
 import os
 import pygame
 import numpy as np
+import logging
+
+# Configurar paths para imports
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../domain')))
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../functions')))
+
+# Imports dos módulos do projeto
 from delivery_point import DeliveryPoint
 from draw_functions import DrawFunctions
 from route import Route
@@ -15,6 +20,7 @@ from mutation_function import Mutation
 from selection_functions import Selection
 from fitness_function import FitnessFunction
 from ui_layout import UILayout
+from app_logging import configurar_logging, get_logger
 
 # Inicializar pygame
 pygame.init()
@@ -37,6 +43,10 @@ LIGHT_GRAY = UILayout.get_color('light_gray')
 
 class TSPGeneticAlgorithm:
     def __init__(self):
+        # Configurar logger para esta classe
+        self.logger = get_logger(__name__)
+        self.logger.info("Inicializando aplicação TSP Genetic Algorithm")
+        
         self.screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
         pygame.display.set_caption("TSP - Genetic Algorithm Approach")
         self.clock = pygame.time.Clock()
@@ -69,10 +79,13 @@ class TSPGeneticAlgorithm:
         self.num_cities = 10
         self.buttons = UILayout.Buttons.create_button_positions()
         
+        self.logger.info("Aplicação inicializada com sucesso")
+        
     
     
     def generate_cities(self, map_type: str, num_cities: int = 10):
         """Gera cidades baseado no tipo de mapa selecionado usando configurações centralizadas."""
+        self.logger.info(f"Gerando {num_cities} cidades usando mapa tipo '{map_type}'")
         self.delivery_points = []
 
         if map_type == "random":
@@ -95,10 +108,11 @@ class TSPGeneticAlgorithm:
 
         elif map_type == "custom":
             # Modo customizado será implementado no método handle_custom_input
-            pass
+            self.logger.info("Modo customizado ativado - aguardando input do usuário")
 
         if self.delivery_points:
             self.calculate_distance_matrix()
+            self.logger.info(f"Geradas {len(self.delivery_points)} cidades com sucesso")
     
     def initialize_population(self):
         """Inicializa a população com cromossomos aleatórios"""
@@ -191,13 +205,23 @@ class TSPGeneticAlgorithm:
         # Atualizar melhor rota
         max_fitness = max(fitness_scores)
         if max_fitness > self.best_fitness:
+            old_fitness = self.best_fitness
             self.best_fitness = max_fitness
             best_idx = fitness_scores.index(max_fitness)
             self.best_route = self.population[best_idx].copy()
+            
+            # Log melhoria significativa
+            if old_fitness == 0 or (max_fitness - old_fitness) / old_fitness > 0.1:
+                self.logger.info(f"Geração {self.current_generation}: Nova melhor fitness {max_fitness:.4f} (+{max_fitness - old_fitness:.4f})")
 
         # Armazenar histórico
         self.fitness_history.append(max_fitness)
-        self.mean_fitness_history.append(np.mean(fitness_scores))
+        mean_fitness = np.mean(fitness_scores)
+        self.mean_fitness_history.append(mean_fitness)
+
+        # Log progresso a cada 10 gerações
+        if self.current_generation % 10 == 0:
+            self.logger.debug(f"Geração {self.current_generation}: Fitness média={mean_fitness:.4f}, Melhor={max_fitness:.4f}")
 
         # Seleção (returns List[Route])
         self.population = self.selection(self.population, fitness_scores)
@@ -272,13 +296,19 @@ class TSPGeneticAlgorithm:
                 # Botões de método de seleção
                 elif 'selection_roulette' in self.buttons and \
                      self.buttons['selection_roulette'].collidepoint(pos):
-                    self.selection_method = "roulette"
+                    if self.selection_method != "roulette":
+                        self.logger.info(f"Método de seleção alterado: {self.selection_method} → roulette")
+                        self.selection_method = "roulette"
                 elif 'selection_tournament' in self.buttons and \
                      self.buttons['selection_tournament'].collidepoint(pos):
-                    self.selection_method = "tournament"
+                    if self.selection_method != "tournament":
+                        self.logger.info(f"Método de seleção alterado: {self.selection_method} → tournament")
+                        self.selection_method = "tournament"
                 elif 'selection_rank' in self.buttons and \
                      self.buttons['selection_rank'].collidepoint(pos):
-                    self.selection_method = "rank"
+                    if self.selection_method != "rank":
+                        self.logger.info(f"Método de seleção alterado: {self.selection_method} → rank")
+                        self.selection_method = "rank"
 
                 # Controles de número de cidades
                 elif self.buttons['cities_minus'].collidepoint(pos) and not self.running_algorithm:
@@ -328,7 +358,12 @@ class TSPGeneticAlgorithm:
     def start_algorithm(self):
         """Inicia o algoritmo genético"""
         if not self.delivery_points:
+            self.logger.warning("Tentativa de iniciar algoritmo sem pontos de entrega")
             return
+        
+        self.logger.info(f"Iniciando algoritmo genético com {len(self.delivery_points)} cidades")
+        self.logger.info(f"Configurações: população={self.population_size}, gerações={self.max_generations}")
+        self.logger.info(f"Métodos: seleção={self.selection_method}, crossover={self.crossover_method}, mutação={self.mutation_method}, elitismo={self.elitism}")
         
         self.running_algorithm = True
         self.current_generation = 0
@@ -340,10 +375,14 @@ class TSPGeneticAlgorithm:
     
     def stop_algorithm(self):
         """Para o algoritmo genético"""
+        self.logger.info(f"Algoritmo interrompido na geração {self.current_generation}")
+        if self.best_fitness > 0:
+            self.logger.info(f"Melhor fitness alcançado: {self.best_fitness:.4f}")
         self.running_algorithm = False
     
     def reset_algorithm(self):
         """Reseta o algoritmo e limpa os dados"""
+        self.logger.info("Resetando algoritmo e limpando dados")
         self.running_algorithm = False
         self.delivery_points = []
         self.population = []
@@ -355,6 +394,7 @@ class TSPGeneticAlgorithm:
     
     def run(self):
         """Loop principal do programa"""
+        self.logger.info("Iniciando loop principal da aplicação")
         running = True
         
         while running:
@@ -366,6 +406,8 @@ class TSPGeneticAlgorithm:
                 
                 # Parar se atingiu o limite de gerações
                 if self.current_generation >= self.max_generations:
+                    self.logger.info(f"Algoritmo finalizado após {self.max_generations} gerações")
+                    self.logger.info(f"Melhor fitness final: {self.best_fitness:.4f}")
                     self.running_algorithm = False
             
             # Desenhar tudo
@@ -404,9 +446,25 @@ class TSPGeneticAlgorithm:
             pygame.display.flip()
             self.clock.tick(60)  # 60 FPS
         
+        self.logger.info("Encerrando aplicação")
         pygame.quit()
         sys.exit()
 
 if __name__ == "__main__":
-    app = TSPGeneticAlgorithm()
-    app.run()
+    # Configurar sistema de logging usando módulo centralizado
+    configurar_logging()
+    
+    # Criar logger para o módulo principal
+    logger = get_logger(__name__)
+    
+    try:
+        # Criar e executar aplicação
+        logger.info("=== Início da Aplicação TSP Genetic Algorithm ===")
+        app = TSPGeneticAlgorithm()
+        app.run()
+        
+    except Exception as e:
+        logger.critical(f"Erro crítico na aplicação: {e}", exc_info=True)
+        raise
+    finally:
+        logger.info("=== Fim da Aplicação ===")
