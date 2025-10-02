@@ -1,276 +1,185 @@
 """
-Configurações centralizadas de layout da interface do usuário.
-Este módulo centraliza todas as posições, tamanhos e cores da interface,
-tornando fácil modificar o layout sem procurar por valores hardcoded.
+Layout centralizado para a UI do TSP (cards fixos, sem sobreposição).
 """
+
 import pygame
 from typing import Dict, Tuple
 
+# Tamanho da janela (não use UILayout dentro das classes aninhadas!)
+WIN_W = 1280
+WIN_H = 860
+
 class UILayout:
-    """Configurações centralizadas para o layout da interface."""
-    
-    # =============================================================================
-    # CONFIGURAÇÕES DA JANELA PRINCIPAL
-    # =============================================================================
-    WINDOW_WIDTH = 1200
-    WINDOW_HEIGHT = 900
-    
-    # =============================================================================
-    # CORES PADRONIZADAS
-    # =============================================================================
+    WINDOW_WIDTH  = WIN_W
+    WINDOW_HEIGHT = WIN_H
+
     COLORS = {
-        'white': (255, 255, 255),
-        'black': (0, 0, 0),
-        'blue': (0, 0, 255),
-        'red': (255, 0, 0),
-        'green': (0, 255, 0),
-        'gray': (128, 128, 128),
-        'light_gray': (200, 200, 200),
-        'dark_gray': (64, 64, 64),
+        'white':      (250, 250, 250),
+        'black':      ( 25,  25,  25),
+        'gray':       (140, 140, 140),
+        'light_gray': (225, 225, 225),
+        'dark_gray':  ( 60,  60,  60),
+        'green':      (  0, 170,  85),
+        'red':        (210,  50,  50),
+        'blue':       ( 56, 132, 255),
+        'yellow':     (235, 185,   0),
     }
-    
-    # =============================================================================
-    # LAYOUT DA ÁREA DE CONTROLES (PAINEL ESQUERDO)
-    # =============================================================================
+
+    @staticmethod
+    def get_color(name: str) -> Tuple[int, int, int]:
+        return UILayout.COLORS.get(name, UILayout.COLORS['white'])
+
     class ControlPanel:
-        # Dimensões do painel de controles
-        X = 10
-        Y = 10
-        WIDTH = 350
-        HEIGHT = 880
-        
-        # Margens internas
-        MARGIN_LEFT = 20
-        MARGIN_TOP = 20
-        SPACING_VERTICAL = 10
-        
-        # Posições Y das seções principais
-        TITLE_Y = 20
-        MAIN_BUTTONS_Y = 50
-        MAP_TYPES_Y = 100
-        CITY_COUNT_Y = 130
-        ELITISM_Y = 170
-        SELECTION_METHODS_Y = 210
-        MUTATION_METHODS_Y = 250
-        CROSSOVER_METHODS_Y = 300
-        PARAMETERS_INFO_Y = 380
-        ALGORITHM_INFO_Y = 480
-        FITNESS_GRAPH_Y = 600
-    
-    # =============================================================================
-    # CONFIGURAÇÕES DOS BOTÕES
-    # =============================================================================
+        X, Y = 12, 12
+        WIDTH  = 360
+        HEIGHT = WIN_H - 24
+
+        PAD = 16
+        TITLE_Y = Y + 8
+
+        # Cards (Y e alturas fixas — cabem confortavelmente)
+        # título interno ocupa ~30px; conteúdo vem depois disso
+        SETUP_Y      = Y + 48
+        SETUP_H      = 150
+
+        RUN_Y        = SETUP_Y + SETUP_H + 12
+        RUN_H        = 120
+
+        OPERATORS_Y  = RUN_Y + RUN_H + 12
+        OPERATORS_H  = 170
+
+        CROSSOVER_Y  = OPERATORS_Y + OPERATORS_H + 12
+        CROSSOVER_H  = 120
+
+        FITNESS_Y    = CROSSOVER_Y + CROSSOVER_H + 12
+        FITNESS_H    = 170
+
+        # para textos e badges
+        KPI_H = 24
+
     class Buttons:
-        # Tamanhos padrão dos botões
-        LARGE_WIDTH = 120
-        LARGE_HEIGHT = 30
-        MEDIUM_WIDTH = 80
-        MEDIUM_HEIGHT = 25
-        SMALL_WIDTH = 60
-        SMALL_HEIGHT = 25
-        TINY_WIDTH = 25
-        TINY_HEIGHT = 25
-        
-        # Espaçamento entre botões
-        HORIZONTAL_SPACING = 10
-        VERTICAL_SPACING = 5
-        
+        LARGE_W, LARGE_H = 150, 32
+        MED_W,   MED_H   = 110, 28
+        SMALL_W, SMALL_H = 110, 26
+        TINY_W,  TINY_H  = 28,  26
+        GAP_X,   GAP_Y   = 8,   8
+
         @staticmethod
         def create_button_positions() -> Dict[str, pygame.Rect]:
-            """Cria todas as posições dos botões de forma organizada."""
             cp = UILayout.ControlPanel
-            btn = UILayout.Buttons
-            
-            buttons = {}
-            
-            # =========================================================================
-            # BOTÕES PRINCIPAIS (Generate Map, Reset)
-            # =========================================================================
-            main_buttons_x = cp.MARGIN_LEFT + 20  # Centralizado no painel
-            buttons['generate_map'] = pygame.Rect(
-                main_buttons_x, cp.MAIN_BUTTONS_Y, 
-                btn.LARGE_WIDTH, btn.LARGE_HEIGHT
-            )
-            buttons['reset'] = pygame.Rect(
-                main_buttons_x + btn.LARGE_WIDTH + btn.HORIZONTAL_SPACING, cp.MAIN_BUTTONS_Y,
-                btn.LARGE_WIDTH, btn.LARGE_HEIGHT
-            )
-            
-            # =========================================================================
-            # BOTÕES DE TIPO DE MAPA (Random, Circle, Custom)
-            # =========================================================================
-            map_x = main_buttons_x
-            buttons['map_random'] = pygame.Rect(
-                map_x, cp.MAP_TYPES_Y, 
-                btn.MEDIUM_WIDTH, btn.MEDIUM_HEIGHT
-            )
-            buttons['map_circle'] = pygame.Rect(
-                map_x + btn.MEDIUM_WIDTH + btn.HORIZONTAL_SPACING, cp.MAP_TYPES_Y,
-                btn.MEDIUM_WIDTH, btn.MEDIUM_HEIGHT
-            )
-            buttons['map_custom'] = pygame.Rect(
-                map_x + 2 * (btn.MEDIUM_WIDTH + btn.HORIZONTAL_SPACING), cp.MAP_TYPES_Y,
-                btn.MEDIUM_WIDTH, btn.MEDIUM_HEIGHT
-            )
-            
-            # =========================================================================
-            # CONTROLES DE NÚMERO DE CIDADES (-, display, +)
-            # =========================================================================
-            city_x = main_buttons_x
-            buttons['cities_minus'] = pygame.Rect(
-                city_x, cp.CITY_COUNT_Y, 
-                btn.TINY_WIDTH, btn.TINY_HEIGHT
-            )
-            buttons['cities_plus'] = pygame.Rect(
-                city_x + 240, cp.CITY_COUNT_Y,  # Posição calculada para ficar no final
-                btn.TINY_WIDTH, btn.TINY_HEIGHT
-            )
-            
-            # =========================================================================
-            # BOTÃO DE ELITISMO
-            # =========================================================================
-            buttons['toggle_elitism'] = pygame.Rect(
-                main_buttons_x, cp.ELITISM_Y, 
-                btn.LARGE_WIDTH, btn.LARGE_HEIGHT
-            )
-            
-            # =========================================================================
-            # BOTÕES DE MÉTODOS DE SELEÇÃO (Roulette, Tournament, Rank)
-            # =========================================================================
-            selection_x = main_buttons_x
-            selection_methods = ['selection_roulette', 'selection_tournament', 'selection_rank']
-            for i, method in enumerate(selection_methods):
-                buttons[method] = pygame.Rect(
-                    selection_x + i * (btn.SMALL_WIDTH + btn.HORIZONTAL_SPACING), 
-                    cp.SELECTION_METHODS_Y,
-                    btn.SMALL_WIDTH, btn.SMALL_HEIGHT
-                )
-            
-            # =========================================================================
-            # BOTÕES DE MÉTODOS DE MUTAÇÃO (Swap, Inverse, Shuffle)
-            # =========================================================================
-            mutation_x = main_buttons_x
-            mutation_methods = ['mutation_swap', 'mutation_inverse', 'mutation_shuffle']
-            for i, method in enumerate(mutation_methods):
-                buttons[method] = pygame.Rect(
-                    mutation_x + i * (btn.SMALL_WIDTH + btn.HORIZONTAL_SPACING), 
-                    cp.MUTATION_METHODS_Y,
-                    btn.SMALL_WIDTH, btn.SMALL_HEIGHT
-                )
-            
-            # =========================================================================
-            # BOTÕES DE MÉTODOS DE CROSSOVER (PMX, OX1, CX, K-Pt, ERX)
-            # =========================================================================
-            crossover_x = main_buttons_x
-            crossover_methods = ['crossover_pmx', 'crossover_ox1', 'crossover_cx', 
-                               'crossover_kpoint', 'crossover_erx']
-            for i, method in enumerate(crossover_methods):
-                buttons[method] = pygame.Rect(
-                    crossover_x + i * (50 + 5),  # Botões menores para crossover
-                    cp.CROSSOVER_METHODS_Y,
-                    50, btn.SMALL_HEIGHT
-                )
-            
-            # =========================================================================
-            # BOTÕES DE CONTROLE DO ALGORITMO (Run, Stop)
-            # =========================================================================
-            buttons['run_algorithm'] = pygame.Rect(
-                main_buttons_x, cp.CROSSOVER_METHODS_Y + 50, 
-                btn.LARGE_WIDTH, btn.LARGE_HEIGHT
-            )
-            buttons['stop_algorithm'] = pygame.Rect(
-                main_buttons_x + btn.LARGE_WIDTH + btn.HORIZONTAL_SPACING, 
-                cp.CROSSOVER_METHODS_Y + 50,
-                btn.LARGE_WIDTH, btn.LARGE_HEIGHT
-            )
-            
-            return buttons
-    
-    # =============================================================================
-    # LAYOUT DA ÁREA DO MAPA (LADO DIREITO)
-    # =============================================================================
+            b  = UILayout.Buttons
+
+            # área interna do card
+            x0 = cp.X + cp.PAD + 4          # 4px de respiro à esquerda
+            w  = cp.WIDTH - 2*cp.PAD        # largura útil do card
+            w_inner = w - 8                 # +4px de respiro à direita (total 4+4)
+
+            btns: Dict[str, pygame.Rect] = {}
+
+            # ---------- SETUP ----------
+            y = cp.SETUP_Y + 36
+
+            # generate + reset (cabem folgados)
+            btns['generate_map'] = pygame.Rect(x0, y, b.LARGE_W, b.LARGE_H)
+            btns['reset']        = pygame.Rect(x0 + b.LARGE_W + 10, y, b.MED_W, b.LARGE_H)
+            y += b.LARGE_H + b.GAP_Y
+
+            # 3 colunas distribuídas na largura *interna*
+            cols3_w = (w_inner - 2*b.GAP_X) // 3
+            btns['map_random'] = pygame.Rect(x0, y, cols3_w, b.SMALL_H)
+            btns['map_circle'] = pygame.Rect(x0 + cols3_w + b.GAP_X, y, cols3_w, b.SMALL_H)
+            btns['map_custom'] = pygame.Rect(x0 + 2*(cols3_w + b.GAP_X), y, cols3_w, b.SMALL_H)
+            y += b.SMALL_H + b.GAP_Y
+
+            # cidades: '-' [display] '+'
+            btns['cities_minus'] = pygame.Rect(x0, y, b.TINY_W, b.TINY_H)
+            btns['cities_plus']  = pygame.Rect(x0 + w_inner - b.TINY_W, y, b.TINY_W, b.TINY_H)
+
+            # ---------- OPERATORS ----------
+            y = cp.OPERATORS_Y + 36
+            btns['toggle_elitism'] = pygame.Rect(x0, y, 130, b.SMALL_H)
+            y += b.SMALL_H + 10
+
+            # Selection (3 colunas)
+            y_sel = y + 18
+            btns['selection_roulette']   = pygame.Rect(x0, y_sel, cols3_w, b.SMALL_H)
+            btns['selection_tournament'] = pygame.Rect(x0 + cols3_w + b.GAP_X, y_sel, cols3_w, b.SMALL_H)
+            btns['selection_rank']       = pygame.Rect(x0 + 2*(cols3_w + b.GAP_X), y_sel, cols3_w, b.SMALL_H)
+
+            # Mutation (3 colunas) — encolhe 4px por botão para garantir que caibam
+            y_mut = y_sel + b.SMALL_H + 24    # já com respiro p/ o label
+            cols3_w_mut = max(80, cols3_w - 4)  # <- ajuste fino de largura
+
+            start_x = x0
+            btns['mutation_swap']    = pygame.Rect(start_x, y_mut, cols3_w_mut, b.SMALL_H)
+            start_x += cols3_w_mut + b.GAP_X
+            btns['mutation_inverse'] = pygame.Rect(start_x, y_mut, cols3_w_mut, b.SMALL_H)
+            start_x += cols3_w_mut + b.GAP_X
+            btns['mutation_shuffle'] = pygame.Rect(start_x, y_mut, cols3_w_mut, b.SMALL_H)
+
+            # ---------- CROSSOVER ----------
+            y = cp.CROSSOVER_Y + 36
+            # 5 colunas distribuídas dentro do w_inner
+            cols5_w = (w_inner - 4*b.GAP_X) // 5
+            names = ['crossover_pmx','crossover_ox1','crossover_cx','crossover_kpoint','crossover_erx']
+            for i, key in enumerate(names):
+                btns[key] = pygame.Rect(x0 + i*(cols5_w + b.GAP_X), y, cols5_w, b.SMALL_H)
+            y += b.SMALL_H + 10
+
+            # Run/Stop
+            btns['run_algorithm']  = pygame.Rect(x0, y, b.LARGE_W, b.LARGE_H)
+            btns['stop_algorithm'] = pygame.Rect(x0 + b.LARGE_W + 10, y, b.MED_W, b.LARGE_H)
+
+            return btns
+
+
     class MapArea:
-        X = 370  # Começa após o painel de controles
-        Y = 10
-        WIDTH = 820  # WINDOW_WIDTH - X - margem
-        HEIGHT = 880
-        
-        # Área onde as cidades podem ser colocadas (com margem interna)
-        CITIES_MARGIN = 30
-        CITIES_X = X + CITIES_MARGIN
-        CITIES_Y = Y + CITIES_MARGIN
-        CITIES_WIDTH = WIDTH - 2 * CITIES_MARGIN
-        CITIES_HEIGHT = HEIGHT - 2 * CITIES_MARGIN
-        
-        # Área para geração aleatória de cidades
+        X = 12 + 360 + 12
+        Y = 12
+        WIDTH  = WIN_W - X - 12
+        HEIGHT = WIN_H - 24
+
+        PAD = 24
+        CITIES_X = X + PAD
+        CITIES_Y = Y + PAD
+        CITIES_WIDTH  = WIDTH  - 2*PAD
+        CITIES_HEIGHT = HEIGHT - 2*PAD
+
         RANDOM_MIN_X = CITIES_X
         RANDOM_MAX_X = CITIES_X + CITIES_WIDTH
         RANDOM_MIN_Y = CITIES_Y
         RANDOM_MAX_Y = CITIES_Y + CITIES_HEIGHT
-        
-        # Centro para geração circular
+
         CIRCLE_CENTER_X = X + WIDTH // 2
         CIRCLE_CENTER_Y = Y + HEIGHT // 2
-        CIRCLE_RADIUS = 200
-    
-    # =============================================================================
-    # LAYOUT DO GRÁFICO DE FITNESS
-    # =============================================================================
+        CIRCLE_RADIUS   = 220
+
     class FitnessGraph:
-        X = 20  # ControlPanel.MARGIN_LEFT
-        Y = 600  # ControlPanel.FITNESS_GRAPH_Y
-        WIDTH = 320
-        HEIGHT = 250
-        
-        # Posições da legenda
-        LEGEND_Y_OFFSET = 10
-        LEGEND_LINE_LENGTH = 20
-        LEGEND_TEXT_OFFSET = 5
-        LEGEND_SPACING = 100  # Espaço entre itens da legenda
-    
-    # =============================================================================
-    # CONFIGURAÇÕES DE TEXTO E FONTES
-    # =============================================================================
+    # Posição e tamanho do retângulo do gráfico dentro do card "Fitness History".
+    # Valores pré-calculados (evitam referenciar ControlPanel aqui).
+    # Cálculo usado:
+    #   X = 12 (cp.X) + 16 (cp.PAD) + 8  = 36
+    #   Y = FITNESS_Y + 36 (título do card) + 4
+    #     = (668) + 40 = 708
+    #   WIDTH  = 360 (cp.WIDTH) - 2*16 (2*cp.PAD) - 16 = 312
+    #   HEIGHT = 230 (FITNESS_H) - 36 (título) - 16 (margens) = 178
+        # X e Y permanecem iguais
+        X = 36
+        Y = 708
+        # largura idem; altura diminui 30 px (200 - 36 - 16 = 148)
+        WIDTH  = 312
+        HEIGHT = 148
+
     class Text:
-        # Tamanhos de fonte
-        FONT_SIZE_LARGE = 24
-        FONT_SIZE_MEDIUM = 18
-        FONT_SIZE_SMALL = 16
-        
-        # Espaçamentos para texto
-        LINE_HEIGHT = 25
-        SECTION_SPACING = 30
-        
-        # Posições específicas para labels
-        CITY_COUNT_LABEL_Y = 135  # ControlPanel.CITY_COUNT_Y + 5
-        SELECTION_LABEL_Y = 190   # ControlPanel.SELECTION_METHODS_Y - 20
-        MUTATION_LABEL_Y = 230    # ControlPanel.MUTATION_METHODS_Y - 20
-        CROSSOVER_LABEL_Y = 280   # ControlPanel.CROSSOVER_METHODS_Y - 20
-    
-    # =============================================================================
-    # ELEMENTOS ESPECIAIS
-    # =============================================================================
-    class SpecialElements:
-        # Campo de exibição do número de cidades
-        CITIES_DISPLAY_X = 70   # ControlPanel.MARGIN_LEFT + 50
-        CITIES_DISPLAY_Y = 130  # ControlPanel.CITY_COUNT_Y
-        CITIES_DISPLAY_WIDTH = 205
-        CITIES_DISPLAY_HEIGHT = 25
-        
-        # Mensagem para modo customizado
-        CUSTOM_MESSAGE_X = 400  # MapArea.X + 30
-        CUSTOM_MESSAGE_Y = 400  # MapArea.Y + MapArea.HEIGHT // 2
+        FONT_L = 24
+        FONT_M = 18
+        FONT_S = 15
+        LINE_H = 24
 
     @staticmethod
-    def get_color(color_name: str) -> Tuple[int, int, int]:
-        """Retorna uma cor pelo nome."""
-        return UILayout.COLORS.get(color_name, UILayout.COLORS['white'])
-    
-    @staticmethod
-    def create_fonts() -> Dict[str, pygame.font.Font]:
-        """Cria as fontes padronizadas."""
+    def create_fonts():
         return {
-            'large': pygame.font.Font(None, UILayout.Text.FONT_SIZE_LARGE),
-            'medium': pygame.font.Font(None, UILayout.Text.FONT_SIZE_MEDIUM),
-            'small': pygame.font.Font(None, UILayout.Text.FONT_SIZE_SMALL),
+            'large':  pygame.font.Font(None, UILayout.Text.FONT_L),
+            'medium': pygame.font.Font(None, UILayout.Text.FONT_M),
+            'small':  pygame.font.Font(None, UILayout.Text.FONT_S),
         }
