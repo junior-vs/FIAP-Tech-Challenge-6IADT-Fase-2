@@ -1,13 +1,13 @@
 """
 Layout centralizado para a UI do TSP (cards fixos, sem sobreposição).
+Inclui card adicional de "Fleet" (múltiplos tipos de veículos).
 """
 
 import pygame
 from typing import Dict, Tuple
 
-# Tamanho da janela (não use UILayout dentro das classes aninhadas!)
 WIN_W = 1280
-WIN_H = 860
+WIN_H = 920
 
 class UILayout:
     WINDOW_WIDTH  = WIN_W
@@ -32,30 +32,32 @@ class UILayout:
     class ControlPanel:
         X, Y = 12, 12
         WIDTH  = 360
-        HEIGHT = WIN_H - 24
-
+        HEIGHT = WIN_H - 24 
+    
         PAD = 16
         TITLE_Y = Y + 8
-
-        # Cards (Y e alturas fixas — cabem confortavelmente)
-        # título interno ocupa ~30px; conteúdo vem depois disso
+    
         SETUP_Y      = Y + 48
-        SETUP_H      = 150
-
+        SETUP_H      = 150  
+    
         RUN_Y        = SETUP_Y + SETUP_H + 12
-        RUN_H        = 120
-
+        RUN_H        = 130 
+    
         OPERATORS_Y  = RUN_Y + RUN_H + 12
-        OPERATORS_H  = 170
-
-        CROSSOVER_Y  = OPERATORS_Y + OPERATORS_H + 12
-        CROSSOVER_H  = 120
-
+        OPERATORS_H  = 190 
+    
+        FLEET_Y      = OPERATORS_Y + OPERATORS_H + 12
+        FLEET_H      = 0
+    
+        CROSSOVER_Y  = FLEET_Y + FLEET_H + 12
+        CROSSOVER_H  = 130
+    
         FITNESS_Y    = CROSSOVER_Y + CROSSOVER_H + 12
-        FITNESS_H    = 170
-
-        # para textos e badges
+        FITNESS_H    = 180
+    
         KPI_H = 24
+
+
 
     class Buttons:
         LARGE_W, LARGE_H = 150, 32
@@ -64,34 +66,32 @@ class UILayout:
         TINY_W,  TINY_H  = 28,  26
         GAP_X,   GAP_Y   = 8,   8
 
+        FLEET_MAX_ROWS = 5
+
         @staticmethod
         def create_button_positions() -> Dict[str, pygame.Rect]:
             cp = UILayout.ControlPanel
             b  = UILayout.Buttons
 
-            # área interna do card
-            x0 = cp.X + cp.PAD + 4          # 4px de respiro à esquerda
-            w  = cp.WIDTH - 2*cp.PAD        # largura útil do card
-            w_inner = w - 8                 # +4px de respiro à direita (total 4+4)
+            x0 = cp.X + cp.PAD + 4        
+            w  = cp.WIDTH - 2*cp.PAD      
+            w_inner = w - 8               
 
             btns: Dict[str, pygame.Rect] = {}
 
             # ---------- SETUP ----------
             y = cp.SETUP_Y + 36
 
-            # generate + reset (cabem folgados)
             btns['generate_map'] = pygame.Rect(x0, y, b.LARGE_W, b.LARGE_H)
             btns['reset']        = pygame.Rect(x0 + b.LARGE_W + 10, y, b.MED_W, b.LARGE_H)
             y += b.LARGE_H + b.GAP_Y
 
-            # 3 colunas distribuídas na largura *interna*
             cols3_w = (w_inner - 2*b.GAP_X) // 3
             btns['map_random'] = pygame.Rect(x0, y, cols3_w, b.SMALL_H)
             btns['map_circle'] = pygame.Rect(x0 + cols3_w + b.GAP_X, y, cols3_w, b.SMALL_H)
             btns['map_custom'] = pygame.Rect(x0 + 2*(cols3_w + b.GAP_X), y, cols3_w, b.SMALL_H)
             y += b.SMALL_H + b.GAP_Y
 
-            # cidades: '-' [display] '+'
             btns['cities_minus'] = pygame.Rect(x0, y, b.TINY_W, b.TINY_H)
             btns['cities_plus']  = pygame.Rect(x0 + w_inner - b.TINY_W, y, b.TINY_W, b.TINY_H)
 
@@ -100,16 +100,13 @@ class UILayout:
             btns['toggle_elitism'] = pygame.Rect(x0, y, 130, b.SMALL_H)
             y += b.SMALL_H + 10
 
-            # Selection (3 colunas)
             y_sel = y + 18
             btns['selection_roulette']   = pygame.Rect(x0, y_sel, cols3_w, b.SMALL_H)
             btns['selection_tournament'] = pygame.Rect(x0 + cols3_w + b.GAP_X, y_sel, cols3_w, b.SMALL_H)
             btns['selection_rank']       = pygame.Rect(x0 + 2*(cols3_w + b.GAP_X), y_sel, cols3_w, b.SMALL_H)
 
-            # Mutation (3 colunas) — encolhe 4px por botão para garantir que caibam
-            y_mut = y_sel + b.SMALL_H + 24    # já com respiro p/ o label
-            cols3_w_mut = max(80, cols3_w - 4)  # <- ajuste fino de largura
-
+            y_mut = y_sel + b.SMALL_H + 24
+            cols3_w_mut = max(80, cols3_w - 4)
             start_x = x0
             btns['mutation_swap']    = pygame.Rect(start_x, y_mut, cols3_w_mut, b.SMALL_H)
             start_x += cols3_w_mut + b.GAP_X
@@ -117,9 +114,27 @@ class UILayout:
             start_x += cols3_w_mut + b.GAP_X
             btns['mutation_shuffle'] = pygame.Rect(start_x, y_mut, cols3_w_mut, b.SMALL_H)
 
+            # ---------- FLEET ----------
+            y = cp.FLEET_Y + 36
+            btns['fleet_add_type'] = pygame.Rect(x0, y, 32, b.SMALL_H)
+            btns['fleet_del_type'] = pygame.Rect(x0 + 40, y, 32, b.SMALL_H)
+            y += b.SMALL_H + 8
+
+            name_w = int(w_inner * 0.42)
+            qty_w  = int(w_inner * 0.14)
+            aut_w  = int(w_inner * 0.22)
+            cost_w = w_inner - (name_w + qty_w + aut_w + 3*b.GAP_X)
+
+            for i in range(b.FLEET_MAX_ROWS):
+                y_row = y + i * (b.SMALL_H + 6)
+                x = x0
+                btns[f'fleet_row{i}_name']     = pygame.Rect(x, y_row, name_w, b.SMALL_H); x += name_w + b.GAP_X
+                btns[f'fleet_row{i}_count']    = pygame.Rect(x, y_row, qty_w,  b.SMALL_H); x += qty_w  + b.GAP_X
+                btns[f'fleet_row{i}_autonomy'] = pygame.Rect(x, y_row, aut_w,  b.SMALL_H); x += aut_w  + b.GAP_X
+                btns[f'fleet_row{i}_cost']     = pygame.Rect(x, y_row, cost_w, b.SMALL_H)
+
             # ---------- CROSSOVER ----------
             y = cp.CROSSOVER_Y + 36
-            # 5 colunas distribuídas dentro do w_inner
             cols5_w = (w_inner - 4*b.GAP_X) // 5
             names = ['crossover_pmx','crossover_ox1','crossover_cx','crossover_kpoint','crossover_erx']
             for i, key in enumerate(names):
@@ -155,18 +170,8 @@ class UILayout:
         CIRCLE_RADIUS   = 220
 
     class FitnessGraph:
-    # Posição e tamanho do retângulo do gráfico dentro do card "Fitness History".
-    # Valores pré-calculados (evitam referenciar ControlPanel aqui).
-    # Cálculo usado:
-    #   X = 12 (cp.X) + 16 (cp.PAD) + 8  = 36
-    #   Y = FITNESS_Y + 36 (título do card) + 4
-    #     = (668) + 40 = 708
-    #   WIDTH  = 360 (cp.WIDTH) - 2*16 (2*cp.PAD) - 16 = 312
-    #   HEIGHT = 230 (FITNESS_H) - 36 (título) - 16 (margens) = 178
-        # X e Y permanecem iguais
         X = 36
         Y = 708
-        # largura idem; altura diminui 30 px (200 - 36 - 16 = 148)
         WIDTH  = 312
         HEIGHT = 148
 

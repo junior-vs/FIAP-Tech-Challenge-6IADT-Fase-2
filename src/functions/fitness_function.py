@@ -1,5 +1,7 @@
 import sys
 import os
+from typing import List, Tuple, Dict, Optional
+from math import inf
 
 # Add the src directory to the path
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -10,19 +12,33 @@ if src_dir not in sys.path:
 from domain.route import Route
 from app_logging import log_performance, get_logger
 
+# === frota (tipos de veículos) ===
+try:
+    from domain.vehicle import VehicleType
+except Exception: 
+    class VehicleType:
+        def __init__(self, name: str, count: int, autonomy: float, cost_per_km: float = 1.0):
+            self.name = name
+            self.count = count
+            self.autonomy = float(autonomy)
+            self.cost_per_km = float(cost_per_km)
+
 
 class FitnessFunction:
 
     # Logger para esta classe
     logger = get_logger(__name__)
 
-    # Definir as capacidades (Constantes do Veículo)
     MAX_WEIGHT = 500_000.0      # Capacidade máxima em gramas (500 kg)
     MAX_VOLUME = 5_000_000.0    # Capacidade máxima em cm³ (5 m³)
 
     # Pesos de Penalidade (Ajuste fino necessário para o AG)
     PENALTY_WEIGHT_FACTOR = 1.0      # Penaliza a sobrecarga de peso (ajuste conforme necessário)
     PENALTY_VOLUME_FACTOR = 0.002    # Penaliza a sobrecarga de volume (ajuste conforme necessário)
+
+    # Penalidade global para inviabilidade de frota/autonomia
+    BIG_PENALTY = 1e12
+
 
     @staticmethod
     @log_performance
@@ -128,4 +144,109 @@ class FitnessFunction:
         return fitness
 
 
+    @staticmethod
+    def _roundtrip_distance(points: List, deposito) -> float:
+        """Distância depósito -> points... -> depósito.
+        Aplica um fator de escala para converter pixels em km, facilitando o uso de autonomia realista.
+        """
+        if not points:
+            return 0.0
 
+        scale = 0.1  # 0.1 = 10px ≈ 1km
+
+        total = deposito.distancia_euclidean(points[0]) * scale
+        for i in range(len(points) - 1):
+            total += points[i].distancia_euclidean(points[i + 1]) * scale
+        total += points[-1].distancia_euclidean(deposito) * scale
+
+        return total
+
+
+    @staticmethod
+    def _split_with_vehicle_choice(order: List, deposito, fleet: List[VehicleType]) -> Tuple[float, List[Route], Dict[str, int], float]:
+        N = len(order)
+        best_cost = [inf] * (N + 1)
+        prev = [-1] * (N + 1)
+        veh_at: List[Optional[VehicleType]] = [None] * (N + 1)
+        best_cost[0] = 0.0
+
+        for i in range(N):
+            if best_cost[i] == inf:
+                continue
+            for j in range(i + 1, N + 1):
+                seq = order[i:j]
+                dist = FitnessFunction._roundtrip_distance(seq, deposito)
+
+                # escolhe veículo mais barato que atende autonomia
+                chosen: Optional[VehicleType] = None
+                chosen_cost = inf
+                for vt in fleet:
+                    if dist <= vt.autonomy:
+                        c = vt.cost_per_km * dist
+                        if c < chosen_cost:
+                            chosen_cost = c
+                            chosen = vt
+
+                if chosen is None:
+                    continue  # nenhum veículo atende esta rota
+
+                cand = best_cost[i] + chosen_cost
+                if cand < best_cost[j]:
+                    best_cost[j] = cand
+                    prev[j] = i
+                    veh_at[j] = chosen
+
+        if best_cost[N] == inf:
+            return FitnessFunction.BIG_PENALTY, [], {}, 0.0
+
+        # reconstrói rotas e contabiliza uso por tipo
+        routes: List[Route] = []
+        usage: Dict[str, int] = {}
+        j = N
+        while j > 0:
+            i = prev[j]
+            seq = order[i:j]
+            r = Route(seq[:])
+            vt = veh_at[j]
+            if hasattr(r, "assign_vehicle"):
+                r.assign_vehicle(vt.name)
+            else:
+                try:
+                    r.vehicle_type = vt.name
+                except Exception:
+                    pass
+            routes.append(r)
+            usage[vt.name] = usage.get(vt.name, 0) + 1
+            j = i
+        routes.reverse()
+
+        # penaliza excesso de quantidade por tipo
+        penalty = 0.0
+        caps: Dict[str, int] = {vt.name: vt.count for vt in fleet}
+        for t, used in usage.items():
+            if used > caps.get(t, 0):
+                penalty += (used - caps.get(t, 0)) * FitnessFunction.BIG_PENALTY * 0.01
+
+        return best_cost[N] + penalty, routes, usage, penalty
+
+    @staticmethod
+    @log_performance
+    def calculate_fitness_with_fleet(route: Route, deposito, fleet: List[VehicleType]) -> Tuple[float, List[Route], Dict[str, int]]:
+        order = getattr(route, "delivery_points", None)
+        if not order:
+            FitnessFunction.logger.warning("Rota vazia para cálculo com frota.")
+            return 0.0, [], {}
+
+        total_cost, routes, usage, penalty = FitnessFunction._split_with_vehicle_choice(order, deposito, fleet)
+
+        if total_cost >= FitnessFunction.BIG_PENALTY:
+            FitnessFunction.logger.warning("Solução inviável (autonomia/frota). Aplicando penalidade.")
+            return 0.0, [], {}
+
+        FitnessFunction.logger.debug(
+            "VRP Fleet -> custo_total: %.3f, rotas: %d, uso: %s, penalidade_qtd: %.3f",
+            total_cost, len(routes), usage, penalty
+        )
+
+        fitness = 1.0 / total_cost if total_cost > 0 else 0.0
+        return fitness, routes, usage
