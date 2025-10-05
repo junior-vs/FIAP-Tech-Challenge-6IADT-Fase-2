@@ -7,7 +7,7 @@ import pygame
 from typing import Dict, Tuple
 
 WIN_W = 1280
-WIN_H = 920
+WIN_H = 1000 # Ajustado para acomodar o gráfico de fitness (antes era 920)
 
 class UILayout:
     WINDOW_WIDTH  = WIN_W
@@ -38,13 +38,16 @@ class UILayout:
         TITLE_Y = Y + 8
     
         SETUP_Y      = Y + 48
-        SETUP_H      = 150  
-    
-        RUN_Y        = SETUP_Y + SETUP_H + 12
-        RUN_H        = 130 
+        SETUP_H      = 150
+
+        PRIORITY_Y   = SETUP_Y + SETUP_H + 12
+        PRIORITY_H   = 56
+
+        RUN_Y        = PRIORITY_Y + PRIORITY_H + 12
+        RUN_H        = 130
     
         OPERATORS_Y  = RUN_Y + RUN_H + 12
-        OPERATORS_H  = 190 
+        OPERATORS_H  = 190
     
         FLEET_Y      = OPERATORS_Y + OPERATORS_H + 12
         FLEET_H      = 0
@@ -94,6 +97,13 @@ class UILayout:
 
             btns['cities_minus'] = pygame.Rect(x0, y, b.TINY_W, b.TINY_H)
             btns['cities_plus']  = pygame.Rect(x0 + w_inner - b.TINY_W, y, b.TINY_W, b.TINY_H)
+            y += b.TINY_H + b.GAP_Y
+
+            # --- Ajuste aqui: posicione o slider logo após o card de Setup ---
+            priority_card_y = cp.PRIORITY_Y
+            priority_card_h = cp.PRIORITY_H
+            slider_y = priority_card_y + 32  # 32px abaixo do topo do card, ajuste se necessário
+            btns['priority_slider'] = pygame.Rect(x0, slider_y, w_inner, b.SMALL_H)
 
             # ---------- OPERATORS ----------
             y = cp.OPERATORS_Y + 36

@@ -86,6 +86,7 @@ class TSPGeneticAlgorithm:
         self.best_fitness = 0
         self.fitness_history = []
         self.mean_fitness_history = []
+        self.priority_percentage = 20  # valor default, pode ser alterado via interface
 
         # --- VRP (múltipla frota) ---
         self.use_fleet = True
@@ -99,13 +100,19 @@ class TSPGeneticAlgorithm:
         self.buttons = UILayout.Buttons.create_button_positions()
         
         self.logger.info("Aplicação inicializada com sucesso")
+
     def _make_random_product(self, idx: int) -> Product:
-        """Gera um produto válido aleatório respeitando as restrições.
+        """Gera um produto válido aleatório respeitando as restrições e a procentagem de prioridade.
 
         - Cada lado <= 100 cm; soma <= 200 cm; peso <= 10000 g.
         """
         name = f"Produto-{idx}"
         weight = random.randint(100, 10_000)
+        # Usa a porcentagem definida na interface
+        if random.random() < (self.priority_percentage / 100):
+            priority = round(random.uniform(0.1, 1.0), 2)
+        else:
+            priority = 0.0
         for _ in range(100):
             a = random.uniform(5.0, 100.0)
             b = random.uniform(5.0, 100.0)
@@ -115,11 +122,15 @@ class TSPGeneticAlgorithm:
                 dims = [a, b, c]
                 random.shuffle(dims)
                 try:
-                    return Product(name=name, weight=weight,
-                                   length=dims[0], width=dims[1], height=dims[2])
+                    return Product(name=name, 
+                                   weight=weight,
+                                   length=dims[0], 
+                                   width=dims[1], 
+                                   height=dims[2], 
+                                   priority=priority)
                 except ValueError:
                     continue
-        return Product(name=name, weight=min(weight, 10_000), length=100, width=50, height=50)
+        return Product(name=name, weight=min(weight, 10_000), length=100, width=50, height=50, priority=priority)
 
     # -------------------- DEPÓSITO --------------------
     def _compute_depot(self) -> DeliveryPoint:
@@ -381,6 +392,15 @@ class TSPGeneticAlgorithm:
                     self.crossover_method = "kpoint"
                 elif self.buttons['crossover_erx'].collidepoint(pos):
                     self.crossover_method = "erx"
+
+                # Slider de prioridade
+                if self.buttons['priority_slider'].collidepoint(pos):
+                    rect = self.buttons['priority_slider']
+                    slider_x = rect.x + 120
+                    slider_w = rect.width - 130
+                    rel_x = min(max(pos[0] - slider_x, 0), slider_w)
+                    pct = int((rel_x / slider_w) * 100)
+                    self.priority_percentage = pct
 
                 elif self.map_type == "custom":
                     self.handle_custom_input(pos)

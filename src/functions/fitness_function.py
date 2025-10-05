@@ -95,8 +95,19 @@ class FitnessFunction:
         weight_penalty = weight_overshoot * FitnessFunction.PENALTY_WEIGHT_FACTOR
         volume_penalty = volume_overshoot * FitnessFunction.PENALTY_VOLUME_FACTOR
 
+        # --- Penalidade por prioridade ---
+        penalty = 0.0
+        n = len(route.delivery_points)
+        for idx, dp in enumerate(route.delivery_points):
+            if hasattr(dp, "product") and dp.product and hasattr(dp.product, "priority"):
+                priority = dp.product.priority
+                # Penalidade: prioridade alta em posições tardias
+                penalty += priority * (idx / max(1, n-1))  # idx=0 é início, idx=n-1 é fim
+        # Normaliza penalidade (quanto menor, melhor)
+        penalty_weight = 2.0  # ajuste conforme necessário
+
         # 4) Custo total
-        total_cost = total_distance + weight_penalty + volume_penalty
+        total_cost = (total_distance + penalty_weight * penalty + 1e-6) + weight_penalty + volume_penalty
 
         # Log detalhado para ajuste fino dos fatores de penalidade
         FitnessFunction.logger.debug(
@@ -170,6 +181,9 @@ class FitnessFunction:
         veh_at: List[Optional[VehicleType]] = [None] * (N + 1)
         best_cost[0] = 0.0
 
+        # --- Armazena as rotas para penalidade de prioridade ---
+        route_splits = [None] * (N + 1)
+
         for i in range(N):
             if best_cost[i] == inf:
                 continue
@@ -195,6 +209,7 @@ class FitnessFunction:
                     best_cost[j] = cand
                     prev[j] = i
                     veh_at[j] = chosen
+                    route_splits[j] = seq[:]  # Salva a sequência para penalidade
 
         if best_cost[N] == inf:
             return FitnessFunction.BIG_PENALTY, [], {}, 0.0
@@ -203,9 +218,11 @@ class FitnessFunction:
         routes: List[Route] = []
         usage: Dict[str, int] = {}
         j = N
+        split_sequences = []
         while j > 0:
             i = prev[j]
             seq = order[i:j]
+            split_sequences.append(seq)
             r = Route(seq[:])
             vt = veh_at[j]
             if hasattr(r, "assign_vehicle"):
@@ -219,6 +236,7 @@ class FitnessFunction:
             usage[vt.name] = usage.get(vt.name, 0) + 1
             j = i
         routes.reverse()
+        split_sequences.reverse()
 
         # penaliza excesso de quantidade por tipo
         penalty = 0.0
@@ -226,6 +244,19 @@ class FitnessFunction:
         for t, used in usage.items():
             if used > caps.get(t, 0):
                 penalty += (used - caps.get(t, 0)) * FitnessFunction.BIG_PENALTY * 0.01
+
+        # --- PENALIDADE DE PRIORIDADE ---
+        priority_penalty = 0.0
+        priority_weight = 2.0  # Ajustar conforme necessário
+        for seq in split_sequences:
+            n = len(seq)
+            for idx, dp in enumerate(seq):
+                if hasattr(dp, "product") and dp.product and hasattr(dp.product, "priority"):
+                    priority = dp.product.priority
+                    # Penaliza prioridade alta em posições tardias
+                    priority_penalty += priority * (idx / max(1, n-1)) if n > 1 else 0
+
+        penalty += priority_penalty * priority_weight
 
         return best_cost[N] + penalty, routes, usage, penalty
 

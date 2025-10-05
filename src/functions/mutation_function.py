@@ -9,6 +9,11 @@ logger = get_logger(__name__)
 class Mutation:
     
     @staticmethod
+    def _prioritize(mutated_points):
+        """Ordena pontos de maior prioridade para aparecerem antes no cromossomo."""
+        return sorted(mutated_points, key=lambda dp: getattr(getattr(dp, "product", None), "priority", 0), reverse=True)
+
+    @staticmethod
     @log_performance
     def mutacao_por_troca(route: Route) -> Route:
         """
@@ -19,6 +24,8 @@ class Mutation:
         idx1, idx2 = random.sample(range(len(mutated_individual)), 2)
         logger.debug(f"Trocando posições {idx1} e {idx2}")
         mutated_individual[idx1], mutated_individual[idx2] = mutated_individual[idx2], mutated_individual[idx1]
+        # Priorizar após mutação
+        mutated_individual = Mutation._prioritize(mutated_individual)
         return Route(mutated_individual)
 
     @staticmethod
@@ -34,6 +41,7 @@ class Mutation:
         sub_sequence = mutated_individual[start:end]
         sub_sequence.reverse()
         mutated_individual[start:end] = sub_sequence
+        mutated_individual = Mutation._prioritize(mutated_individual)
         return Route(mutated_individual)
 
     @staticmethod
@@ -49,4 +57,5 @@ class Mutation:
         sub_sequence = mutated_individual[start:end]
         random.shuffle(sub_sequence)
         mutated_individual[start:end] = sub_sequence
+        mutated_individual = Mutation._prioritize(mutated_individual)
         return Route(mutated_individual)

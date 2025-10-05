@@ -83,6 +83,23 @@ class DrawFunctions:
 
     # -------------------- LATERAL ESQUERDA --------------------
     @staticmethod
+    def draw_priority_slider(app):
+        rect = app.buttons['priority_slider']
+        # Slider bar
+        slider_x = rect.x + 120
+        slider_w = rect.width - 130
+        slider_y = rect.y + rect.height // 2
+        pygame.draw.line(app.screen, GRAY, (slider_x, slider_y), (slider_x + slider_w, slider_y), 4)
+        # Handle
+        pct = max(0, min(100, int(app.priority_percentage)))
+        handle_x = slider_x + int((pct / 100) * slider_w)
+        pygame.draw.circle(app.screen, BLUE, (handle_x, slider_y), 10)
+        pygame.draw.circle(app.screen, WHITE, (handle_x, slider_y), 7)
+        # Label
+        label = app.small_font.render(f"Priority %: {pct}", True, BLACK)
+        app.screen.blit(label, (rect.x + 8, rect.y + 4))
+
+    @staticmethod
     def draw_interface(app: Any) -> None:
         cp = UILayout.ControlPanel
         panel = pygame.Rect(cp.X, cp.Y, cp.WIDTH, cp.HEIGHT)
@@ -113,6 +130,12 @@ class DrawFunctions:
         pygame.draw.rect(app.screen, WHITE, disp_rect, border_radius=4)
         pygame.draw.rect(app.screen, BLACK, disp_rect, 2)
         app.screen.blit(app.small_font.render(f"Cities: {app.num_cities}", True, BLACK), app.small_font.render(f"Cities: {app.num_cities}", True, BLACK).get_rect(center=disp_rect.center))
+
+        # --- Priority Slider (NOVO CARD) ---
+        priority_card_y = cp.SETUP_Y + cp.SETUP_H + 12
+        priority_card_h = 56
+        _card(app.screen, x, priority_card_y, w, priority_card_h, "Priority", app.font)
+        DrawFunctions.draw_priority_slider(app)
 
         # --- Run ---
         _card(app.screen, x, cp.RUN_Y, w, cp.RUN_H, "Run", app.font)
@@ -196,8 +219,21 @@ class DrawFunctions:
     @staticmethod
     def draw_cities(app: Any) -> None:
         for i, c in enumerate(app.delivery_points):
-            pygame.draw.circle(app.screen, BLUE, (c.x, c.y), 7)
-            pygame.draw.circle(app.screen, WHITE, (c.x, c.y), 5)
+            # Verifica prioridade do produto
+            priority = getattr(getattr(c, "product", None), "priority", 0)
+            # Destaca cidades com prioridade > 0
+            if priority and priority > 0:
+                # Quanto maior a prioridade, mais "amarelo" (ou use outra cor)
+                color = (255, 215, 0) if priority >= 0.8 else (255, 255, 153)  # Ouro para prioridade alta
+                pygame.draw.circle(app.screen, color, (c.x, c.y), 10)
+                pygame.draw.circle(app.screen, BLUE, (c.x, c.y), 7)
+                pygame.draw.circle(app.screen, WHITE, (c.x, c.y), 5)
+                # Mostra valor da prioridade
+                prio_txt = app.small_font.render(f"{priority:.2f}", True, BLACK)
+                app.screen.blit(prio_txt, (c.x + 12, c.y - 8))
+            else:
+                pygame.draw.circle(app.screen, BLUE, (c.x, c.y), 7)
+                pygame.draw.circle(app.screen, WHITE, (c.x, c.y), 5)
             t = app.small_font.render(str(i), True, BLACK)
             app.screen.blit(t, t.get_rect(center=(c.x, c.y)))
 

@@ -169,6 +169,12 @@ class Crossover:
         return Route(child1), Route(child2)
 
     @staticmethod
+    def _prioritize(child_points: List[DeliveryPoint]) -> List[DeliveryPoint]:
+        """Ordena pontos de maior prioridade para aparecerem antes no cromossomo."""
+        # Ordena por: prioridade decrescente, mantendo ordem relativa dos demais
+        return sorted(child_points, key=lambda dp: getattr(getattr(dp, "product", None), "priority", 0), reverse=True)
+
+    @staticmethod
     def crossover_parcialmente_mapeado_pmx(parent1: Route, parent2: Route) -> Tuple[Route, Route]:
         """
         Implementa o Crossover Parcialmente Mapeado (PMX) para o TSP.
@@ -219,6 +225,10 @@ class Crossover:
         # 4. Chamada de Reparo
         child1 = repair(child1, mapping1)  # C1 recebe o segmento P2 e é reparado pelo mapa P2 -> P1
         child2 = repair(child2, mapping2)  # C2 recebe o segmento P1 e é reparado pelo mapa P1 -> P2
+
+        # --- Priorizar pontos de maior prioridade no início ---
+        child1 = Crossover._prioritize(child1)
+        child2 = Crossover._prioritize(child2)
 
         return Route(child1), Route(child2)
         
