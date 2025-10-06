@@ -7,3 +7,8 @@ pygame==2.6.1
 Pygments==2.19.2
 pytest==8.4.2
 scipy==1.16.2
+google-generativeai>=0.7.0
+python-dotenv>=1.0.1
+pydantic>=2.8.0
+
+

@@ -5,11 +5,13 @@ import math
 import os
 import pygame
 import numpy as np
-import logging
+from datetime import datetime
+import json
 
 # Configurar paths para imports
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../domain')))
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../functions')))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))  # adiciona 'src' ao sys.path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../domain")))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../functions")))
 
 # Imports dos módulos do projeto
 from delivery_point import DeliveryPoint
@@ -22,6 +24,7 @@ from fitness_function import FitnessFunction
 from ui_layout import UILayout
 from app_logging import configurar_logging, get_logger
 from product import Product
+from llm.report_generator import LLMServices
 
 # Inicializar pygame
 pygame.init()
@@ -31,15 +34,13 @@ WINDOW_WIDTH = UILayout.WINDOW_WIDTH
 WINDOW_HEIGHT = UILayout.WINDOW_HEIGHT
 
 # Importar cores do layout centralizado
-WHITE = UILayout.get_color('white')
-BLACK = UILayout.get_color('black')
-BLUE = UILayout.get_color('blue')
-RED = UILayout.get_color('red')
-GREEN = UILayout.get_color('green')
-GRAY = UILayout.get_color('gray')
-LIGHT_GRAY = UILayout.get_color('light_gray')
-
-
+WHITE = UILayout.get_color("white")
+BLACK = UILayout.get_color("black")
+BLUE = UILayout.get_color("blue")
+RED = UILayout.get_color("red")
+GREEN = UILayout.get_color("green")
+GRAY = UILayout.get_color("gray")
+LIGHT_GRAY = UILayout.get_color("light_gray")
 
 
 class TSPGeneticAlgorithm:
@@ -47,20 +48,20 @@ class TSPGeneticAlgorithm:
         # Configurar logger para esta classe
         self.logger = get_logger(__name__)
         self.logger.info("Inicializando aplicação TSP Genetic Algorithm")
-        
+
         self.screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
         pygame.display.set_caption("TSP - Genetic Algorithm Approach")
         self.clock = pygame.time.Clock()
-        
+
         # Usar fontes centralizadas
         fonts = UILayout.create_fonts()
-        self.font = fonts['large']
-        self.small_font = fonts['medium']
-        
+        self.font = fonts["large"]
+        self.small_font = fonts["medium"]
+
         # Variáveis do algoritmo
         self.delivery_points: List[DeliveryPoint] = []
         self.distance_matrix = None
-        self.population = []  # will hold List[Route] after initialization
+        self.population: List[Route] = []
         self.population_size = 50
         self.max_generations = 100
         self.mutation_method = "swap"  # Default method: swap
@@ -69,54 +70,63 @@ class TSPGeneticAlgorithm:
         self.elitism = True
         self.running_algorithm = False
         self.current_generation = 0
-        self.best_route = None
-        self.best_fitness = 0
-        self.fitness_history = []
-        self.mean_fitness_history = []
+        self.best_route: Route | None = None
+        self.best_fitness = 0.0
+        self.fitness_history: List[float] = []
+        self.mean_fitness_history: List[float] = []
 
         # Interface - usar layout centralizado
         self.ui_layout = UILayout()
         self.map_type = "random"  # "random", "circle", "custom"
         self.num_cities = 10
         self.buttons = UILayout.Buttons.create_button_positions()
-        
+
+        # >>> Botão extra: Perguntar à IA
+        # Posiciona o botão no painel lateral (ajuste fino se desejar).
+        side_x = UILayout.MapArea.X + UILayout.MapArea.WIDTH + 20
+        side_y = UILayout.MapArea.Y + 320
+        self.ask_btn_rect = pygame.Rect(side_x, side_y, 260, 40)
+        self._show_console_hint_frames = 0  # contador para aviso “digite no terminal…”
+
         self.logger.info("Aplicação inicializada com sucesso")
+
+        # Inicialização do módulo LLM
+        self.llm = LLMServices()
+        self.output_dir = os.path.join(os.getcwd(), "out")
+        os.makedirs(self.output_dir, exist_ok=True)
+
     def _make_random_product(self, idx: int) -> Product:
         """Gera um produto válido aleatório respeitando as restrições.
-
         - Cada lado <= 100 cm; soma <= 200 cm; peso <= 10000 g.
         """
-        # Nome simples baseado no índice
         name = f"Produto-{idx}"
-        # Peso entre 100 g e 10000 g
         weight = random.randint(100, 10_000)
-        # Gerar dimensões: escolha dois lados aleatórios e derive o terceiro para respeitar soma
         for _ in range(100):
             a = random.uniform(5.0, 100.0)
             b = random.uniform(5.0, 100.0)
             max_c = min(100.0, 200.0 - (a + b))
             if max_c > 5.0:
                 c = random.uniform(5.0, max_c)
-                # aleatorizar a ordem (C, L, A)
                 dims = [a, b, c]
                 random.shuffle(dims)
                 try:
-                    return Product(name=name, weight=weight,
-                                   length=dims[0], width=dims[1], height=dims[2])
+                    return Product(
+                        name=name,
+                        weight=weight,
+                        length=dims[0],
+                        width=dims[1],
+                        height=dims[2],
+                    )
                 except ValueError:
                     continue
-        # fallback seguro: dimensões fixas válidas
         return Product(name=name, weight=min(weight, 10_000), length=100, width=50, height=50)
-        
-    
-    
+
     def generate_cities(self, map_type: str, num_cities: int = 10):
         """Gera cidades baseado no tipo de mapa selecionado usando configurações centralizadas."""
         self.logger.info(f"Gerando {num_cities} cidades usando mapa tipo '{map_type}'")
         self.delivery_points = []
 
         if map_type == "random":
-            # Usar área definida no layout centralizado
             for i in range(num_cities):
                 x = random.randint(UILayout.MapArea.RANDOM_MIN_X, UILayout.MapArea.RANDOM_MAX_X)
                 y = random.randint(UILayout.MapArea.RANDOM_MIN_Y, UILayout.MapArea.RANDOM_MAX_Y)
@@ -124,7 +134,6 @@ class TSPGeneticAlgorithm:
                 self.delivery_points.append(DeliveryPoint(x, y, product=prod))
 
         elif map_type == "circle":
-            # Usar configurações centralizadas para círculo
             center_x = UILayout.MapArea.CIRCLE_CENTER_X
             center_y = UILayout.MapArea.CIRCLE_CENTER_Y
             radius = UILayout.MapArea.CIRCLE_RADIUS
@@ -136,58 +145,47 @@ class TSPGeneticAlgorithm:
                 self.delivery_points.append(DeliveryPoint(int(x), int(y), product=prod))
 
         elif map_type == "custom":
-            # Modo customizado será implementado no método handle_custom_input
             self.logger.info("Modo customizado ativado - aguardando input do usuário")
 
         if self.delivery_points:
             self.calculate_distance_matrix()
             self.logger.info(f"Geradas {len(self.delivery_points)} cidades com sucesso")
-    
+
     def initialize_population(self):
         """Inicializa a população com cromossomos aleatórios"""
         self.population = []
-
-        # Create population as shuffled Route instances
         base = list(self.delivery_points)
         for _ in range(self.population_size):
             shuffled = base[:]
             random.shuffle(shuffled)
             self.population.append(Route(shuffled))
-    
+
     def selection(self, population: List[Route], fitness_scores: List[float]) -> List[Route]:
         """Seleção usando métodos do selection_functions.py com suporte a diferentes algoritmos e elitismo."""
-        # Verificação de segurança para evitar erros
         total_fitness = sum(fitness_scores)
         if total_fitness == 0:
             return population.copy()
 
-        # Selecionar método de seleção baseado na configuração
         new_population = []
         for _ in range(len(population)):
             if self.selection_method == "roulette":
                 chosen = Selection.roulette(population, fitness_scores)
             elif self.selection_method == "tournament":
-                # Usar tamanho de torneio padrão de 3
                 chosen = Selection.tournament(population, fitness_scores, tournament_size=3)
             elif self.selection_method == "rank":
                 chosen = Selection.rank(population, fitness_scores)
             else:
-                # Fallback para roleta
                 chosen = Selection.roulette(population, fitness_scores)
-            
             new_population.append(chosen.copy())
 
-        # Aplicar elitismo - preservar o melhor indivíduo da geração atual
         if self.elitism and self.best_route:
             best_idx = fitness_scores.index(max(fitness_scores))
-            # Substitui o último indivíduo da nova população pelo melhor da atual
             new_population[-1] = population[best_idx].copy()
 
         return new_population
-    
+
     def crossover(self, parent1: Route, parent2: Route) -> Tuple[Route, Route]:
         """Wrapper que usa as implementações de Crossover baseado no método selecionado."""
-        
         if self.crossover_method == "pmx":
             return Crossover.crossover_parcialmente_mapeado_pmx(parent1, parent2)
         elif self.crossover_method == "ox1":
@@ -197,16 +195,14 @@ class TSPGeneticAlgorithm:
         elif self.crossover_method == "kpoint":
             return Crossover.crossover_multiplos_pontos_kpoint(parent1, parent2, k=2)
         elif self.crossover_method == "erx":
-            # ERX retorna um filho, então criamos dois chamando duas vezes
             child1 = Crossover.erx_crossover(parent1, parent2)
             child2 = Crossover.erx_crossover(parent2, parent1)
             return child1, child2
         else:
-            # Fallback para PMX
             return Crossover.crossover_parcialmente_mapeado_pmx(parent1, parent2)
-    
+
     def mutate(self, route: Route) -> Route:
-        """Apply a mutation operator from Mutation module to a Route based on selected method."""
+        """Aplica operador de mutação conforme método selecionado."""
         if self.mutation_method == "swap":
             return Mutation.mutacao_por_troca(route)
         elif self.mutation_method == "inverse":
@@ -214,13 +210,10 @@ class TSPGeneticAlgorithm:
         elif self.mutation_method == "shuffle":
             return Mutation.mutacao_por_embaralhamento(route)
         else:
-            # Fallback para swap
             return Mutation.mutacao_por_troca(route)
-    
 
     def calculate_distance_matrix(self):
         """Calcula a matriz de distâncias entre todos os pontos de entrega"""
-        # Delega o cálculo para DeliveryPoint
         self.distance_matrix = DeliveryPoint.compute_distance_matrix(self.delivery_points)
 
     def run_generation(self):
@@ -228,64 +221,90 @@ class TSPGeneticAlgorithm:
         if not self.population:
             self.initialize_population()
 
-        # Calcular fitness de toda a população (population is List[Route])
         fitness_scores = [FitnessFunction.calculate_fitness_with_constraints(ind) for ind in self.population]
 
-        # Atualizar melhor rota
         max_fitness = max(fitness_scores)
         if max_fitness > self.best_fitness:
             old_fitness = self.best_fitness
             self.best_fitness = max_fitness
             best_idx = fitness_scores.index(max_fitness)
             self.best_route = self.population[best_idx].copy()
-            
-            # Log melhoria significativa
-            if old_fitness == 0 or (max_fitness - old_fitness) / old_fitness > 0.1:
-                self.logger.info(f"Geração {self.current_generation}: Nova melhor fitness {max_fitness:.4f} (+{max_fitness - old_fitness:.4f})")
 
-        # Armazenar histórico
+            if old_fitness == 0 or (max_fitness - old_fitness) / old_fitness > 0.1:
+                self.logger.info(
+                    f"Geração {self.current_generation}: Nova melhor fitness {max_fitness:.4f} (+{max_fitness - old_fitness:.4f})"
+                )
+
         self.fitness_history.append(max_fitness)
         mean_fitness = np.mean(fitness_scores)
         self.mean_fitness_history.append(mean_fitness)
 
-        # Log progresso a cada 10 gerações
         if self.current_generation % 10 == 0:
-            self.logger.debug(f"Geração {self.current_generation}: Fitness média={mean_fitness:.4f}, Melhor={max_fitness:.4f}")
+            self.logger.debug(
+                f"Geração {self.current_generation}: Fitness média={mean_fitness:.4f}, Melhor={max_fitness:.4f}"
+            )
 
-        # Seleção (returns List[Route])
         self.population = self.selection(self.population, fitness_scores)
 
-        # Crossover e mutação
         new_population = []
-
         for i in range(0, len(self.population), 2):
             parent1 = self.population[i]
             parent2 = self.population[(i + 1) % len(self.population)]
-
-            # Sempre aplicar crossover - usuário escolhe apenas o método
             child1, child2 = self.crossover(parent1, parent2)
-
             child1 = self.mutate(child1)
             child2 = self.mutate(child2)
-
             new_population.extend([child1, child2])
 
-        # Trim to population size and advance generation
-        self.population = new_population[:self.population_size]
+        self.population = new_population[: self.population_size]
         self.current_generation += 1
-      
-    
+
     def handle_custom_input(self, pos):
         """Permite ao usuário clicar para adicionar cidades customizadas usando área definida no layout."""
         if self.map_type == "custom" and pos[0] > UILayout.MapArea.X:
-            # Garantir que o clique está dentro da área válida
-            if (UILayout.MapArea.CITIES_X <= pos[0] <= UILayout.MapArea.CITIES_X + UILayout.MapArea.CITIES_WIDTH and
-                UILayout.MapArea.CITIES_Y <= pos[1] <= UILayout.MapArea.CITIES_Y + UILayout.MapArea.CITIES_HEIGHT):
+            if (
+                UILayout.MapArea.CITIES_X <= pos[0] <= UILayout.MapArea.CITIES_X + UILayout.MapArea.CITIES_WIDTH
+                and UILayout.MapArea.CITIES_Y <= pos[1] <= UILayout.MapArea.CITIES_Y + UILayout.MapArea.CITIES_HEIGHT
+            ):
                 prod = self._make_random_product(len(self.delivery_points))
                 self.delivery_points.append(DeliveryPoint(pos[0], pos[1], product=prod))
                 if len(self.delivery_points) > 1:
                     self.calculate_distance_matrix()
-    
+
+    # -------------------- Fluxo de Perguntas à IA --------------------
+
+    def _ask_llm_flow(self):
+        """Fluxo completo para pergunta em linguagem natural via botão/atalho."""
+        snapshot = self._build_route_snapshot()
+        if not snapshot.get("stops"):
+            self.logger.warning("[LLM] Snapshot sem 'stops'. Gere o mapa/rota antes de perguntar.")
+            return
+
+        # dica visual por alguns frames
+        self._show_console_hint_frames = 180  # ~3s a 60 FPS
+
+        try:
+            question = input("Digite sua pergunta sobre a rota (ex.: 'Qual é a primeira parada prioritária?'): ").strip()
+        except EOFError:
+            question = ""
+
+        if not question:
+            self.logger.info("[LLM] Pergunta vazia — cancelado.")
+            return
+
+        self.logger.info(f"[LLM] Respondendo pergunta: {question}")
+        try:
+            answer = self.llm.answer_natural_language(question, snapshot)
+        except Exception as e:
+            self.logger.error(f"[LLM] Erro ao obter resposta: {e}")
+            return
+
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        ans_path = os.path.join(self.output_dir, f"resposta_{ts}.md")
+        with open(ans_path, "w", encoding="utf-8") as f:
+            f.write(f"# Pergunta\n{question}\n\n# Resposta\n{answer}\n")
+        self.logger.info(f"[LLM] Resposta salva em: {ans_path}")
+        print("\n==== RESPOSTA DA IA ====\n" + answer + "\n=========================\n")
+
     def handle_events(self):
         """Gerencia eventos do pygame"""
         for event in pygame.event.get():
@@ -295,83 +314,78 @@ class TSPGeneticAlgorithm:
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 pos = pygame.mouse.get_pos()
 
-                # Verificar cliques nos botões
-                if self.buttons['generate_map'].collidepoint(pos) and not self.running_algorithm:
+                if self.buttons["generate_map"].collidepoint(pos) and not self.running_algorithm:
                     self.generate_cities(self.map_type, self.num_cities)
 
-                elif self.buttons['run_algorithm'].collidepoint(pos) and not self.running_algorithm:
+                elif self.buttons["run_algorithm"].collidepoint(pos) and not self.running_algorithm:
                     if self.delivery_points:
                         self.start_algorithm()
 
-                elif self.buttons['stop_algorithm'].collidepoint(pos) and self.running_algorithm:
+                elif self.buttons["stop_algorithm"].collidepoint(pos) and self.running_algorithm:
                     self.stop_algorithm()
 
-                elif self.buttons['reset'].collidepoint(pos):
+                elif self.buttons["reset"].collidepoint(pos):
                     self.reset_algorithm()
 
-                elif self.buttons['map_random'].collidepoint(pos):
+                elif self.buttons["map_random"].collidepoint(pos):
                     self.map_type = "random"
 
-                elif self.buttons['map_circle'].collidepoint(pos):
+                elif self.buttons["map_circle"].collidepoint(pos):
                     self.map_type = "circle"
 
-                elif self.buttons['map_custom'].collidepoint(pos):
+                elif self.buttons["map_custom"].collidepoint(pos):
                     self.map_type = "custom"
                     self.delivery_points = []
 
-                # Botão Elitism
-                elif self.buttons['toggle_elitism'].collidepoint(pos):
+                elif self.buttons["toggle_elitism"].collidepoint(pos):
                     self.elitism = not self.elitism
 
-                # Botões de método de seleção
-                elif 'selection_roulette' in self.buttons and \
-                     self.buttons['selection_roulette'].collidepoint(pos):
+                elif "selection_roulette" in self.buttons and self.buttons["selection_roulette"].collidepoint(pos):
                     if self.selection_method != "roulette":
                         self.logger.info(f"Método de seleção alterado: {self.selection_method} → roulette")
                         self.selection_method = "roulette"
-                elif 'selection_tournament' in self.buttons and \
-                     self.buttons['selection_tournament'].collidepoint(pos):
+                elif "selection_tournament" in self.buttons and self.buttons["selection_tournament"].collidepoint(pos):
                     if self.selection_method != "tournament":
                         self.logger.info(f"Método de seleção alterado: {self.selection_method} → tournament")
                         self.selection_method = "tournament"
-                elif 'selection_rank' in self.buttons and \
-                     self.buttons['selection_rank'].collidepoint(pos):
+                elif "selection_rank" in self.buttons and self.buttons["selection_rank"].collidepoint(pos):
                     if self.selection_method != "rank":
                         self.logger.info(f"Método de seleção alterado: {self.selection_method} → rank")
                         self.selection_method = "rank"
 
-                # Controles de número de cidades
-                elif self.buttons['cities_minus'].collidepoint(pos) and not self.running_algorithm:
-                    if self.num_cities > 3:  # Mínimo de 3 cidades
+                elif self.buttons["cities_minus"].collidepoint(pos) and not self.running_algorithm:
+                    if self.num_cities > 3:
                         self.num_cities -= 1
 
-                elif self.buttons['cities_plus'].collidepoint(pos) and not self.running_algorithm:
-                    if self.num_cities < 50:  # Máximo de 50 cidades
+                elif self.buttons["cities_plus"].collidepoint(pos) and not self.running_algorithm:
+                    if self.num_cities < 50:
                         self.num_cities += 1
 
-                # Botões de método de mutação
-                elif self.buttons['mutation_swap'].collidepoint(pos):
+                elif self.buttons["mutation_swap"].collidepoint(pos):
                     self.mutation_method = "swap"
-                elif self.buttons['mutation_inverse'].collidepoint(pos):
+                elif self.buttons["mutation_inverse"].collidepoint(pos):
                     self.mutation_method = "inverse"
-                elif self.buttons['mutation_shuffle'].collidepoint(pos):
+                elif self.buttons["mutation_shuffle"].collidepoint(pos):
                     self.mutation_method = "shuffle"
 
-                # Botões de método de crossover
-                elif self.buttons['crossover_pmx'].collidepoint(pos):
+                elif self.buttons["crossover_pmx"].collidepoint(pos):
                     self.crossover_method = "pmx"
-                elif self.buttons['crossover_ox1'].collidepoint(pos):
+                elif self.buttons["crossover_ox1"].collidepoint(pos):
                     self.crossover_method = "ox1"
-                elif self.buttons['crossover_cx'].collidepoint(pos):
+                elif self.buttons["crossover_cx"].collidepoint(pos):
                     self.crossover_method = "cx"
-                elif self.buttons['crossover_kpoint'].collidepoint(pos):
+                elif self.buttons["crossover_kpoint"].collidepoint(pos):
                     self.crossover_method = "kpoint"
-                elif self.buttons['crossover_erx'].collidepoint(pos):
+                elif self.buttons["crossover_erx"].collidepoint(pos):
                     self.crossover_method = "erx"
 
                 # Modo customizado - adicionar cidade
                 elif self.map_type == "custom":
                     self.handle_custom_input(pos)
+
+                # >>> Clique no botão "Perguntar à IA"
+                if self.ask_btn_rect.collidepoint(pos):
+                    self._ask_llm_flow()
 
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_SPACE and not self.running_algorithm:
@@ -383,33 +397,74 @@ class TSPGeneticAlgorithm:
                     else:
                         return False
 
+                # Atalho "R" para gerar relatórios e instruções
+                elif event.key == pygame.K_r:
+                    # Garantir que existe uma rota antes de gerar snapshot (fallback já existe dentro do snapshot)
+                    self.logger.info("[LLM] Gerando relatório e instruções via Gemini...")
+                    snapshot = self._build_route_snapshot()
+
+                    # Guard: se ainda assim não houver stops, evita chamada à LLM
+                    if not snapshot.get("stops"):
+                        self.logger.warning(
+                            "[LLM] Snapshot sem 'stops'. Gere o mapa e/ou rode o algoritmo antes de apertar 'R'."
+                        )
+                        continue
+                    print(json.dumps(snapshot, indent=2, ensure_ascii=False))
+
+                    try:
+                        instructions = self.llm.generate_driver_instructions(snapshot)
+                        report = self.llm.generate_period_report(
+                            {"snapshot": snapshot, "operation_date": snapshot.get("date", "")[:7]},  # mostra YYYY-MM
+                            "Diário",
+                        )
+
+                        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+                        instr_path = os.path.join(self.output_dir, f"instrucoes_{ts}.md")
+                        rep_path = os.path.join(self.output_dir, f"relatorio_{ts}.md")
+
+                        with open(instr_path, "w", encoding="utf-8") as f:
+                            f.write(instructions)
+                        with open(rep_path, "w", encoding="utf-8") as f:
+                            f.write(report)
+
+                        self.logger.info(f"[LLM] Instruções salvas em: {instr_path}")
+                        self.logger.info(f"[LLM] Relatório salvo em: {rep_path}")
+                    except Exception as e:
+                        self.logger.error(f"[LLM] Erro ao gerar instruções/relatório: {e}")
+
+                # >>> Atalho Q para o mesmo fluxo do botão
+                elif event.key == pygame.K_q:
+                    self._ask_llm_flow()
+
         return True
-    
+
     def start_algorithm(self):
         """Inicia o algoritmo genético"""
         if not self.delivery_points:
             self.logger.warning("Tentativa de iniciar algoritmo sem pontos de entrega")
             return
-        
+
         self.logger.info(f"Iniciando algoritmo genético com {len(self.delivery_points)} cidades")
         self.logger.info(f"Configurações: população={self.population_size}, gerações={self.max_generations}")
-        self.logger.info(f"Métodos: seleção={self.selection_method}, crossover={self.crossover_method}, mutação={self.mutation_method}, elitismo={self.elitism}")
-        
+        self.logger.info(
+            f"Métodos: seleção={self.selection_method}, crossover={self.crossover_method}, mutação={self.mutation_method}, elitismo={self.elitism}"
+        )
+
         self.running_algorithm = True
         self.current_generation = 0
-        self.best_fitness = 0
+        self.best_fitness = 0.0
         self.best_route = None
         self.fitness_history = []
         self.mean_fitness_history = []
         self.initialize_population()
-    
+
     def stop_algorithm(self):
         """Para o algoritmo genético"""
         self.logger.info(f"Algoritmo interrompido na geração {self.current_generation}")
         if self.best_fitness > 0:
             self.logger.info(f"Melhor fitness alcançado: {self.best_fitness:.4f}")
         self.running_algorithm = False
-    
+
     def reset_algorithm(self):
         """Reseta o algoritmo e limpa os dados"""
         self.logger.info("Resetando algoritmo e limpando dados")
@@ -417,49 +472,167 @@ class TSPGeneticAlgorithm:
         self.delivery_points = []
         self.population = []
         self.current_generation = 0
-        self.best_fitness = 0
+        self.best_fitness = 0.0
         self.best_route = None
         self.fitness_history = []
         self.mean_fitness_history = []
-    
+
+    def _build_route_snapshot(self) -> dict:
+        """
+        Monta um snapshot detalhado da rota para o LLM.
+        Regras:
+          - Se existir best_route, usa ela.
+          - Senão, usa o melhor indivíduo da população (se houver).
+          - Senão, usa a ordem dos delivery_points (mapa gerado).
+        Sempre devolve 'stops' quando houver pontos disponíveis.
+        """
+        try:
+            # 1) Escolher a sequência de pontos da rota
+            points = []
+            route_source = "none"
+            if getattr(self, "best_route", None) and getattr(self.best_route, "points", None):
+                points = list(self.best_route.points)
+                route_source = "best_route"
+            elif getattr(self, "population", None):
+                try:
+                    fitness_scores = [FitnessFunction.calculate_fitness_with_constraints(ch) for ch in self.population]
+                    if fitness_scores:
+                        best_idx = fitness_scores.index(max(fitness_scores))
+                        points = list(self.population[best_idx].points)
+                        route_source = "population_best"
+                except Exception:
+                    route_source = "population_error"
+                    points = []
+            if not points and self.delivery_points:
+                points = list(self.delivery_points)
+                route_source = "delivery_points"
+
+            if not points:
+                # sem pontos, devolve snapshot mínimo (evita lista vazia)
+                return {
+                    "date": datetime.now().strftime("%Y-%m-%d"),
+                    "map_type": getattr(self, "map_type", "unknown"),
+                    "num_cities": 0,
+                    "best_fitness": 0.0,
+                    "stops": [],
+                    "constraints": {
+                        "vehicle_capacity_kg": 100,
+                        "vehicle_range_km": 200,
+                        "priority_policy": "Critica > Alta > Media > Baixa",
+                    },
+                    "notes": "Sem pontos para gerar snapshot.",
+                }
+
+            # 2) Construir stops ricos
+            stops = []
+            for i, p in enumerate(points):
+                prod = getattr(p, "product", None)
+                prod_dict = {}
+                if prod:
+                    prod_dict = {
+                        "name": getattr(prod, "name", f"Item-{i+1}"),
+                        "weight_g": getattr(prod, "weight", None),
+                        "dimensions_cm": {
+                            "length": getattr(prod, "length", None),
+                            "width": getattr(prod, "width", None),
+                            "height": getattr(prod, "height", None),
+                        },
+                        "cold_chain": False,
+                    }
+
+                stops.append(
+                    {
+                        "order": i + 1,
+                        "coords": {"x": int(p.x), "y": int(p.y)},
+                        "address": f"Coordenada ({int(p.x)},{int(p.y)})",
+                        "priority": "Média",
+                        "time_window": "08:00-18:00",
+                        "items": [prod_dict] if prod_dict else [],
+                        "notes": "",
+                    }
+                )
+
+            snapshot = {
+                "date": datetime.now().strftime("%Y-%m-%d"),
+                "map_type": getattr(self, "map_type", "unknown"),
+                "num_cities": len(self.delivery_points),
+                "best_fitness": float(getattr(self, "best_fitness", 0.0) or 0.0),
+                "stops": stops,
+                "constraints": {
+                    "vehicle_capacity_kg": 100,
+                    "vehicle_range_km": 200,
+                    "priority_policy": "Critica > Alta > Media > Baixa",
+                },
+                "notes": f"Snapshot gerado automaticamente (fonte da rota: {route_source}).",
+            }
+            return snapshot
+
+        except Exception as e:
+            self.logger.error(f"Erro ao montar snapshot de rota: {e}")
+            return {
+                "date": datetime.now().strftime("%Y-%m-%d"),
+                "map_type": getattr(self, "map_type", "unknown"),
+                "num_cities": len(self.delivery_points),
+                "best_fitness": float(getattr(self, "best_fitness", 0.0) or 0.0),
+                "stops": [],
+                "constraints": {
+                    "vehicle_capacity_kg": 100,
+                    "vehicle_range_km": 200,
+                    "priority_policy": "Critica > Alta > Media > Baixa",
+                },
+                "notes": "Falha ao montar snapshot.",
+            }
+
+    def _draw_ask_button(self):
+        """Desenha o botão 'Perguntar à IA' e, opcionalmente, uma dica temporária."""
+        pygame.draw.rect(self.screen, LIGHT_GRAY, self.ask_btn_rect, border_radius=8)
+        pygame.draw.rect(self.screen, BLACK, self.ask_btn_rect, 2, border_radius=8)
+        label = self.small_font.render("Perguntar à IA (Q)", True, BLACK)
+        label_rect = label.get_rect(center=self.ask_btn_rect.center)
+        self.screen.blit(label, label_rect)
+
+        # Mostra aviso por alguns frames quando vamos usar o input no console
+        if self._show_console_hint_frames > 0:
+            hint = self.small_font.render("Digite sua pergunta no terminal ↑", True, BLUE)
+            hint_rect = hint.get_rect()
+            hint_rect.topleft = (self.ask_btn_rect.left, self.ask_btn_rect.bottom + 8)
+            self.screen.blit(hint, hint_rect)
+            self._show_console_hint_frames -= 1
+
     def run(self):
         """Loop principal do programa"""
         self.logger.info("Iniciando loop principal da aplicação")
         running = True
-        
+
         while running:
             running = self.handle_events()
-            
-            # Executar uma geração se o algoritmo estiver rodando
+
             if self.running_algorithm and self.current_generation < self.max_generations:
                 self.run_generation()
-                
-                # Parar se atingiu o limite de gerações
                 if self.current_generation >= self.max_generations:
                     self.logger.info(f"Algoritmo finalizado após {self.max_generations} gerações")
                     self.logger.info(f"Melhor fitness final: {self.best_fitness:.4f}")
                     self.running_algorithm = False
-            
-            # Desenhar tudo
+
             self.screen.fill(WHITE)
-            
-            # Área do mapa usando configurações centralizadas
+
             map_rect = (UILayout.MapArea.X, UILayout.MapArea.Y, UILayout.MapArea.WIDTH, UILayout.MapArea.HEIGHT)
             pygame.draw.rect(self.screen, WHITE, map_rect)
             pygame.draw.rect(self.screen, BLACK, map_rect, 2)
-            
-            # Desenhar interface via DrawFunctions
+
             DrawFunctions.draw_interface(self)
-            
-            # Desenhar cidades e rotas
+
+            # Botão "Perguntar à IA"
+            self._draw_ask_button()
+
             if self.delivery_points:
-                # Desenhar melhor rota
                 if self.best_route:
                     DrawFunctions.draw_route(self, self.best_route, RED, 3)
 
-                # Desenhar rota da geração atual
                 if self.population and self.running_algorithm:
-                    fitness_scores = [FitnessFunction.calculate_fitness_with_constraints(chrom) for chrom in self.population]
+                    fitness_scores = [
+                        FitnessFunction.calculate_fitness_with_constraints(chrom) for chrom in self.population
+                    ]
                     if fitness_scores:
                         best_idx = fitness_scores.index(max(fitness_scores))
                         current_best = self.population[best_idx]
@@ -467,32 +640,34 @@ class TSPGeneticAlgorithm:
 
                 DrawFunctions.draw_cities(self)
 
-            # Instruções para modo customizado usando posição centralizada
             if self.map_type == "custom" and not self.delivery_points:
                 instruction = self.font.render("Click on the map to add cities", True, BLACK)
-                self.screen.blit(instruction, (UILayout.SpecialElements.CUSTOM_MESSAGE_X, 
-                                             UILayout.SpecialElements.CUSTOM_MESSAGE_Y))
-            
+                self.screen.blit(
+                    instruction,
+                    (UILayout.SpecialElements.CUSTOM_MESSAGE_X, UILayout.SpecialElements.CUSTOM_MESSAGE_Y),
+                )
+
             pygame.display.flip()
             self.clock.tick(60)  # 60 FPS
-        
+
         self.logger.info("Encerrando aplicação")
         pygame.quit()
         sys.exit()
 
+
 if __name__ == "__main__":
     # Configurar sistema de logging usando módulo centralizado
     configurar_logging()
-    
+
     # Criar logger para o módulo principal
     logger = get_logger(__name__)
-    
+
     try:
         # Criar e executar aplicação
         logger.info("=== Início da Aplicação TSP Genetic Algorithm ===")
         app = TSPGeneticAlgorithm()
         app.run()
-        
+
     except Exception as e:
         logger.critical(f"Erro crítico na aplicação: {e}", exc_info=True)
         raise
