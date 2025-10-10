@@ -56,6 +56,19 @@ LIGHT_GRAY = UILayout.get_color('light_gray')
 
 
 class TSPGeneticAlgorithm:
+    @staticmethod
+    def log_performance(func):
+        """Decorator para medir e logar o tempo de execução de métodos críticos."""
+        import time
+        def wrapper(*args, **kwargs):
+            logger = get_logger(func.__module__)
+            start = time.perf_counter()
+            logger.debug(f"[PERF] Iniciando '{func.__name__}'")
+            result = func(*args, **kwargs)
+            elapsed = (time.perf_counter() - start) * 1000
+            logger.info(f"[PERF] '{func.__name__}' executado em {elapsed:.2f} ms")
+            return result
+        return wrapper
     def __init__(self):
         # Configurar logger para esta classe
         self.logger = get_logger(__name__)
@@ -171,20 +184,25 @@ class TSPGeneticAlgorithm:
             self.depot = self._compute_depot()
             self.logger.info(f"Geradas {len(self.delivery_points)} cidades com sucesso")
     
+    @log_performance
     def initialize_population(self):
         """Inicializa a população com cromossomos aleatórios"""
+        self.logger.info(f"Inicializando população de tamanho {self.population_size}")
         self.population = []
-
         base = list(self.delivery_points)
         for _ in range(self.population_size):
             shuffled = base[:]
             random.shuffle(shuffled)
             self.population.append(Route(shuffled))
+        self.logger.debug(f"População inicializada com {len(self.population)} rotas")
     
+    @log_performance
     def selection(self, population: List[Route], fitness_scores: List[float]) -> List[Route]:
         """Seleção usando métodos do selection_functions.py com suporte a diferentes algoritmos e elitismo."""
+        self.logger.debug(f"Iniciando seleção: método={self.selection_method}, elitismo={self.elitism}")
         total_fitness = sum(fitness_scores)
         if total_fitness == 0:
+            self.logger.warning("Total de fitness zero, copiando população.")
             return population.copy()
 
         new_population = []
@@ -192,7 +210,7 @@ class TSPGeneticAlgorithm:
             if self.selection_method == "roulette":
                 chosen = Selection.roulette(population, fitness_scores)
             elif self.selection_method == "tournament":
-                chosen = Selection.tournament(population, fitness_scores, tournament_size=3)
+                chosen = Selection.tournament_refined(population, fitness_scores, tournament_size=3)
             elif self.selection_method == "rank":
                 chosen = Selection.rank(population, fitness_scores)
             else:
@@ -202,12 +220,16 @@ class TSPGeneticAlgorithm:
         # Elitismo
         if self.elitism and self.best_route:
             best_idx = fitness_scores.index(max(fitness_scores))
+            self.logger.info(f"Elitismo: substituindo último indivíduo pelo melhor da geração (fitness={fitness_scores[best_idx]:.4f})")
             new_population[-1] = population[best_idx].copy()
 
+        self.logger.debug(f"Seleção concluída. Nova população: {len(new_population)} indivíduos.")
         return new_population
     
+    @log_performance
     def crossover(self, parent1: Route, parent2: Route) -> Tuple[Route, Route]:
         """Wrapper que usa as implementações de Crossover baseado no método selecionado."""
+        self.logger.debug(f"Executando crossover: método={self.crossover_method}")
         if self.crossover_method == "pmx":
             return Crossover.crossover_parcialmente_mapeado_pmx(parent1, parent2)
         elif self.crossover_method == "ox1":
@@ -223,8 +245,10 @@ class TSPGeneticAlgorithm:
         else:
             return Crossover.crossover_parcialmente_mapeado_pmx(parent1, parent2)
     
+    @log_performance
     def mutate(self, route: Route) -> Route:
         """Apply a mutation operator from Mutation module to a Route based on selected method."""
+        self.logger.debug(f"Executando mutação: método={self.mutation_method}")
         if self.mutation_method == "swap":
             return Mutation.mutacao_por_troca(route)
         elif self.mutation_method == "inverse":
@@ -239,9 +263,12 @@ class TSPGeneticAlgorithm:
         self.distance_matrix = DeliveryPoint.compute_distance_matrix(self.delivery_points)
 
     # -------------------- EXECUÇÃO DE UMA GERAÇÃO --------------------
+    @log_performance
     def run_generation(self):
         """Executa uma geração do algoritmo genético"""
+        self.logger.info(f"Executando geração {self.current_generation}")
         if not self.population:
+            self.logger.warning("População vazia, inicializando...")
             self.initialize_population()
 
         # ---- cálculo de fitness ----
@@ -250,12 +277,11 @@ class TSPGeneticAlgorithm:
             results = [FitnessFunction.calculate_fitness_with_fleet(ind, self.depot, self.fleet)
                        for ind in self.population]
             fitness_scores = [r[0] for r in results]
-
             for ind, (fit, routes, usage) in zip(self.population, results):
                 ind.fitness = fit
                 ind.routes = routes
                 ind.vehicle_usage = usage
-
+                self.logger.debug(f"Fitness: {fit:.4f} | Uso frota: {usage}")
         else:
             fitness_scores = [FitnessFunction.calculate_fitness_with_constraints(ind)
                               for ind in self.population]
@@ -263,6 +289,7 @@ class TSPGeneticAlgorithm:
                 ind.fitness = fit
                 if hasattr(ind, "routes"): ind.routes = None
                 if hasattr(ind, "vehicle_usage"): ind.vehicle_usage = None
+                self.logger.debug(f"Fitness: {fit:.4f}")
 
         # Atualizar melhor rota
         max_fitness = max(fitness_scores)
@@ -284,9 +311,10 @@ class TSPGeneticAlgorithm:
         self.fitness_history.append(max_fitness)
         mean_fitness = np.mean(fitness_scores)
         self.mean_fitness_history.append(mean_fitness)
+        self.logger.info(f"Fitness máximo: {max_fitness:.4f} | Fitness médio: {mean_fitness:.4f}")
 
         if self.current_generation % 10 == 0:
-            self.logger.debug(f"Geração {self.current_generation}: Fitness média={mean_fitness:.4f}, Melhor={max_fitness:.4f}")
+            self.logger.info(f"Checkpoint: geração {self.current_generation}")
 
         # Seleção
         self.population = self.selection(self.population, fitness_scores)

@@ -1,6 +1,8 @@
 import re
 from typing import Tuple, Optional, List, Dict, Set
 import random
+
+from numpy import size
 from route import Route
 from delivery_point import DeliveryPoint
 
@@ -28,7 +30,47 @@ class Crossover:
                 child[i] = remaining_genes[fill_index]
                 fill_index += 1
         return Route(child)
+    
+    @staticmethod
+    def order_crossover_v2(parent1: Route, parent2: Route) -> Route:
+        """Order Crossover (OX) versão 2. Retorna um filho. Se tamanho < 2, retorna cópia do pai."""
+        
+        parent_a_points = parent1.delivery_points
+        parent_b_points = parent2.delivery_points
+        size = len(parent_a_points)
 
+        # Verificação de Robustez
+        if size < 2:
+            return parent1.copy()
+        
+        # Seleção do segmento de crossover
+        #Seleciona e orna os dois idces de corte
+        cut1, cut2 = sorted(random.sample(range(size), 2))
+        
+        # Copia o segmento central do Pai 1
+        child_points = [None] * size
+        child_points[cut1:cut2] = parent_a_points[cut1:cut2]
+    
+        child_segment = set(child_points[cut1:cut2])
+
+        # Obtém os genes do Pai 2 na ordem em que aparecem, removendo os duplicados
+        remaining_genes = [gene for gene in parent_b_points if gene not in child_segment]
+         
+        # Identifica as posições de preenchimento no filho (fora do segmento central)
+        # A ordem de preenchimento é circular, começando logo após o ponto de corte final (cut2).
+    
+        # Cria uma lista das posições que precisam ser preenchidas no 'child_points'
+
+        fill_positions = list(range(cut2, size)) + list(range(0, cut1))
+
+        # Preenchimento (Filling)    
+        # O tamanho de remaining_genes deve ser igual ao tamanho de fill_positions
+
+        for pos, gene in zip(fill_positions, remaining_genes):
+            child_points[pos] = gene
+
+        return Route(child_points)
+    
     @staticmethod
     def erx_crossover(parent1: Route, parent2: Route) -> Route:
         """Edge Recombination Crossover (ERX). Usa índices; retorna cópia se trivial."""
