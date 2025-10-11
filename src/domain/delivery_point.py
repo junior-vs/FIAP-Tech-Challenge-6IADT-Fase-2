@@ -47,3 +47,15 @@ class DeliveryPoint:
     def __repr__(self):
         pname = getattr(self.product, "name", None)
         return f"Delivery Point (x={self.x}, y={self.y}, product={pname})"
+    
+    # Adicionar ao final da classe DeliveryPoint (delivery_point.py)
+    def __eq__(self, other: object) -> bool:
+        """Compara dois DeliveryPoints. Eles são iguais se tiverem a mesma posição (x, y)."""
+        if not isinstance(other, DeliveryPoint):
+            return NotImplemented
+        # Comparamos apenas as coordenadas. O produto associado não define o ponto de entrega.
+        return self.x == other.x and self.y == other.y
+
+    def __hash__(self) -> int:
+        """Define o hash para que DeliveryPoint possa ser usado em sets e dicionários."""
+        return hash((self.x, self.y))

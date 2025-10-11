@@ -15,6 +15,26 @@ from typing import Optional
 from pathlib import Path
 
 
+class ExcludePerfFilter(logging.Filter):
+    """Filtro que remove logs de performance do console."""
+    
+    def filter(self, record: logging.LogRecord) -> bool:
+        """
+        Filtra mensagens que contenham [PERF] para não aparecerem no console.
+        
+        Args:
+            record: Record de log a ser avaliado
+            
+        Returns:
+            True se o log deve ser exibido, False caso contrário
+        """
+        try:
+            msg = record.getMessage()
+        except Exception:
+            return True
+        return "[PERF]" not in msg
+
+
 def configurar_logging(
     nome_ficheiro: Optional[str] = None,
     nivel_consola: int = logging.INFO,
@@ -61,13 +81,14 @@ def configurar_logging(
         datefmt='%Y-%m-%d %H:%M:%S'
     )
 
-    # 2. Handler para a consola (stdout)
+    # 2. Handler para a consola (stdout) - SEM logs de performance
     handler_consola = logging.StreamHandler(sys.stdout)
     handler_consola.setLevel(nivel_consola)
     handler_consola.setFormatter(formato)
+    handler_consola.addFilter(ExcludePerfFilter())  # <- Filtrar [PERF] do console
     logger.addHandler(handler_consola)
 
-    # 3. Handler para arquivo
+    # 3. Handler para arquivo - COM todos os logs incluindo performance
     try:
         # Caminho completo para o arquivo de log
         log_path = logs_dir / nome_ficheiro
@@ -77,11 +98,12 @@ def configurar_logging(
             mode='a', 
             encoding='utf-8'
         )
-        handler_ficheiro.setLevel(nivel_ficheiro)
+        handler_ficheiro.setLevel(nivel_ficheiro)  # DEBUG: mantém [PERF] no arquivo
         handler_ficheiro.setFormatter(formato)
         logger.addHandler(handler_ficheiro)
         
         logging.info(f"Sistema de logging configurado com sucesso! Arquivo: {log_path}")
+        logging.info("Logs de performance [PERF] serão salvos apenas no arquivo")
     except (IOError, OSError) as e:
         logging.warning(f"Não foi possível configurar logging para arquivo: {e}")
 
