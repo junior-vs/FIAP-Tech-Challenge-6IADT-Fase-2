@@ -40,7 +40,7 @@ class TestDeliveryPoint(unittest.TestCase):
     def test_eq_and_hash(self):
         self.assertEqual(self.dp1, self.dp3)
         self.assertNotEqual(self.dp1, self.dp2)
-        s = set([self.dp1, self.dp3, self.dp2])
+        s = {self.dp1, self.dp3, self.dp2}
         self.assertEqual(len(s), 2)
 
 if __name__ == "__main__":

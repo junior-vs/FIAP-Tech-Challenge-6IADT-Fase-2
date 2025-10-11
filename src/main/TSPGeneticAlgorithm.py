@@ -1,13 +1,15 @@
 import sys
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 import os
 import pygame
 import numpy as np
+
 
 # Configurar paths para imports
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../domain')))
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../functions')))
 
+from genetic_engine import GeneticEngine
 # Imports dos módulos do projeto
 from delivery_point import DeliveryPoint
 from route import Route
@@ -22,7 +24,7 @@ from product import Product
 from population_factory import PopulationFactory
 
 try:
-    from vehicle import VehicleType, default_fleet 
+    from src.domain.vehicle import VehicleType, default_fleet 
 except Exception:
     class VehicleType:
         def __init__(self, name: str, count: int, autonomy: float, cost_per_km: float = 1.0):
@@ -111,30 +113,20 @@ class TSPGeneticAlgorithm:
         self.num_cities = 10
         self.buttons = UILayout.Buttons.create_button_positions()
         
-        # Cache para operações frequentes (performance)
+        # Engine do Algoritmo Genético (separa lógica do GA da UI)
+        self.engine = GeneticEngine(
+            population_size=self.population_size,
+            selection_method=self.selection_method,
+            crossover_method=self.crossover_method,
+            mutation_method=self.mutation_method,
+            elitism=self.elitism,
+            use_fleet=self.use_fleet,
+        )
+        # Manter caches locais para compatibilidade com UI (limpeza via botões)
         self._selection_method_cache = {}
         self._crossover_method_cache = {}
         self._mutation_method_cache = {}
         self._fitness_cache = {}
-        
-        # Factory para população
-        self.population_factory = PopulationFactory()
-        
-        self.logger.info("Aplicação inicializada com sucesso")
-        self.fitness_history = []
-        self.mean_fitness_history = []
-        self.priority_percentage = 20  # valor default, pode ser alterado via interface
-
-        # --- VRP (múltipla frota) ---
-        self.use_fleet = True
-        self.fleet: List[VehicleType] = default_fleet()
-        self.depot: DeliveryPoint = None 
-
-        # Interface - usar layout centralizado
-        self.ui_layout = UILayout()
-        self.map_type = "random"  # "random", "circle", "custom"
-        self.num_cities = 10
-        self.buttons = UILayout.Buttons.create_button_positions()
         
         self.logger.info("Aplicação inicializada com sucesso")
 
@@ -172,80 +164,31 @@ class TSPGeneticAlgorithm:
             cy = UILayout.MapArea.CITIES_Y + UILayout.MapArea.CITIES_HEIGHT // 2
             self.depot = DeliveryPoint.create_depot(cx, cy)
             self.logger.info(f"Geradas {len(self.delivery_points)} cidades com sucesso")
+            # Atualizar contexto do engine
+            self.engine.set_delivery_points(self.delivery_points)
+            self.engine.set_vrp_context(self.depot, self.fleet)
     
     def initialize_population(self):
-        """Inicializa a população usando factory pattern."""
-        self.population = self.population_factory.create_initial_population(
-            self.delivery_points, self.population_size
-        )
+        """Inicializa a população via GeneticEngine."""
+        # Garantir que engine está com parâmetros atualizados
+        # Atualizar contexto do engine e inicializar população
+        self.engine.population_size = self.population_size
+        self.engine.selection_method = self.selection_method
+        self.engine.crossover_method = self.crossover_method
+        self.engine.mutation_method = self.mutation_method
+        self.engine.elitism = self.elitism
+        self.engine.use_fleet = self.use_fleet
+        self.engine.current_generation = 0
+        self.engine.best_fitness = 0.0
+        self.engine.best_route = None
+        self.engine.fitness_history = []
+        self.engine.mean_fitness_history = []
+        self.engine.set_delivery_points(self.delivery_points)
+        self.engine.set_vrp_context(self.depot, self.fleet)
+        self.engine.clear_caches()
+        self.engine.initialize_population()
+        self.population = self.engine.population
     
-  #  @log_performance
-    def selection(self, population: List[Route], fitness_scores: List[float]) -> List[Route]:
-        """Seleção otimizada usando cache para métodos."""
-        total_fitness = sum(fitness_scores)
-        if total_fitness == 0:
-            self.logger.warning("Total de fitness zero, copiando população.")
-            return population.copy()
-
-        # Cache do método de seleção para evitar verificações repetidas
-        if self.selection_method not in self._selection_method_cache:
-            if self.selection_method == "roulette":
-                self._selection_method_cache[self.selection_method] = Selection.roulette
-            elif self.selection_method == "tournament":
-                self._selection_method_cache[self.selection_method] = lambda pop, scores: Selection.tournament_refined(pop, scores, tournament_size=3)
-            elif self.selection_method == "rank":
-                self._selection_method_cache[self.selection_method] = Selection.rank
-            else:
-                self._selection_method_cache[self.selection_method] = Selection.roulette
-        
-        selection_func = self._selection_method_cache[self.selection_method]
-        
-        # Gerar nova população
-        new_population = [selection_func(population, fitness_scores).copy() 
-                         for _ in range(len(population))]
-
-        # Elitismo otimizado
-        if self.elitism and self.best_route:
-            best_idx = fitness_scores.index(max(fitness_scores))
-            new_population[-1] = population[best_idx].copy()
-
-        return new_population
-    
-  #  @log_performance
-    def crossover(self, parent1: Route, parent2: Route) -> Tuple[Route, Route]:
-        """Crossover otimizado com cache para métodos."""
-        # Cache do método de crossover
-        if self.crossover_method not in self._crossover_method_cache:
-            if self.crossover_method == "pmx":
-                self._crossover_method_cache[self.crossover_method] = Crossover.crossover_parcialmente_mapeado_pmx
-            elif self.crossover_method == "ox1":
-                self._crossover_method_cache[self.crossover_method] = Crossover.crossover_ordenado_ox1
-            elif self.crossover_method == "cx":
-                self._crossover_method_cache[self.crossover_method] = Crossover.crossover_de_ciclo_cx
-            elif self.crossover_method == "kpoint":
-                self._crossover_method_cache[self.crossover_method] = lambda p1, p2: Crossover.crossover_multiplos_pontos_kpoint(p1, p2, k=2)
-            elif self.crossover_method == "erx":
-                self._crossover_method_cache[self.crossover_method] = lambda p1, p2: (Crossover.erx_crossover(p1, p2), Crossover.erx_crossover(p2, p1))
-            else:
-                self._crossover_method_cache[self.crossover_method] = Crossover.crossover_parcialmente_mapeado_pmx
-        
-        return self._crossover_method_cache[self.crossover_method](parent1, parent2)
-    
-   # @log_performance
-    def mutate(self, route: Route) -> Route:
-        """Mutação otimizada com cache para métodos."""
-        # Cache do método de mutação
-        if self.mutation_method not in self._mutation_method_cache:
-            if self.mutation_method == "swap":
-                self._mutation_method_cache[self.mutation_method] = Mutation.mutacao_por_troca
-            elif self.mutation_method == "inverse":
-                self._mutation_method_cache[self.mutation_method] = Mutation.mutacao_por_inversao
-            elif self.mutation_method == "shuffle":
-                self._mutation_method_cache[self.mutation_method] = Mutation.mutacao_por_embaralhamento
-            else:
-                self._mutation_method_cache[self.mutation_method] = Mutation.mutacao_por_troca
-        
-        return self._mutation_method_cache[self.mutation_method](route)
     
     def calculate_distance_matrix(self):
         """Calcula a matriz de distâncias entre todos os pontos de entrega"""
@@ -254,102 +197,18 @@ class TSPGeneticAlgorithm:
     # -------------------- EXECUÇÃO DE UMA GERAÇÃO --------------------
     @log_performance
     def run_generation(self):
-        """Executa uma geração do algoritmo genético"""
-        self.logger.info(f"Executando geração {self.current_generation}")
-        if not self.population:
-            self.logger.warning("População vazia, inicializando...")
-            self.initialize_population()
-
-        # Calcular fitness de forma otimizada
-        fitness_scores, results = self._calculate_fitness_optimized()
-        
-        # Atualizar melhor rota
-        self._update_best_route(fitness_scores, results)
-        
-        # Atualizar histórico
-        self._update_fitness_history(fitness_scores)
-        
-        # Checkpoint periódico
-        if self.current_generation % 10 == 0:
-            self.logger.info(f"Checkpoint: geração {self.current_generation}")
-
-        # Evoluir população
-        self._evolve_population(fitness_scores)
-        
-        self.current_generation += 1
-    
-    def _calculate_fitness_optimized(self) -> Tuple[List[float], List]:
-        """Calcula fitness de forma otimizada com cache quando possível."""
-        if self.use_fleet and self.depot is not None:
-            # VRP - usar numpy para operações vectorizadas quando possível
-            results = [FitnessFunction.calculate_fitness_with_fleet(ind, self.depot, self.fleet)
-                       for ind in self.population]
-            fitness_scores = [r[0] for r in results]
-            # Atualizar atributos da população em lote
-            for ind, (fit, routes, usage) in zip(self.population, results):
-                ind.fitness = fit
-                ind.routes = routes
-                ind.vehicle_usage = usage
-        else:
-            # TSP simples
-            results = None
-            fitness_scores = [FitnessFunction.calculate_fitness_with_constraints(ind)
-                              for ind in self.population]
-            # Atualizar atributos em lote
-            for ind, fit in zip(self.population, fitness_scores):
-                ind.fitness = fit
-                if hasattr(ind, "routes"): 
-                    ind.routes = None
-                if hasattr(ind, "vehicle_usage"): 
-                    ind.vehicle_usage = None
-        
+        """Executa uma geração do algoritmo genético via GeneticEngine."""
+        self.logger.info(f"Executando geração {self.engine.current_generation}")
+        fitness_scores, results = self.engine.run_generation()
+        # Espelhar estado para UI
+        self.population = self.engine.population
+        self.best_route = self.engine.best_route
+        self.best_fitness = self.engine.best_fitness
+        self.fitness_history = self.engine.fitness_history
+        self.mean_fitness_history = self.engine.mean_fitness_history
+        self.current_generation = self.engine.current_generation
         return fitness_scores, results
     
-    def _update_best_route(self, fitness_scores: List[float], results: List) -> None:
-        """Atualiza a melhor rota da geração."""
-        max_fitness = max(fitness_scores)
-        if max_fitness > self.best_fitness:
-            old_fitness = self.best_fitness
-            self.best_fitness = max_fitness
-            best_idx = fitness_scores.index(max_fitness)
-            self.best_route = self.population[best_idx].copy()
-
-            if self.use_fleet and results:
-                best_res = results[best_idx]
-                self.best_route.routes = best_res[1] 
-                self.best_route.vehicle_usage = best_res[2]
-
-            # Log apenas melhorias significativas (>10%)
-            if old_fitness == 0 or (old_fitness > 0 and (max_fitness - old_fitness) / old_fitness > 0.1):
-                self.logger.info(f"Geração {self.current_generation}: Nova melhor fitness {max_fitness:.4f} (+{max_fitness - old_fitness:.4f})")
-    
-    def _update_fitness_history(self, fitness_scores: List[float]) -> None:
-        """Atualiza o histórico de fitness."""
-        max_fitness = max(fitness_scores)
-        mean_fitness = np.mean(fitness_scores)
-        self.fitness_history.append(max_fitness)
-        self.mean_fitness_history.append(mean_fitness)
-        self.logger.info(f"Fitness máximo: {max_fitness:.4f} | Fitness médio: {mean_fitness:.4f}")
-    
-    def _evolve_population(self, fitness_scores: List[float]) -> None:
-        """Evolui a população através de seleção, crossover e mutação."""
-        # Seleção
-        self.population = self.selection(self.population, fitness_scores)
-
-        # Crossover e mutação otimizados
-        new_population = []
-        pop_len = len(self.population)
-        
-        for i in range(0, pop_len, 2):
-            parent1 = self.population[i]
-            parent2 = self.population[(i + 1) % pop_len]
-            
-            child1, child2 = self.crossover(parent1, parent2)
-            child1 = self.mutate(child1)
-            child2 = self.mutate(child2)
-            new_population.extend([child1, child2])
-
-        self.population = new_population[:self.population_size]
       
     # -------------------- INPUT CUSTOM --------------------
     def handle_custom_input(self, pos):
@@ -371,36 +230,35 @@ class TSPGeneticAlgorithm:
             if event.type == pygame.QUIT:
                 return False
             elif event.type == pygame.MOUSEBUTTONDOWN:
-                if not self._handle_mouse_click(pygame.mouse.get_pos()):
-                    return False
+                # Clique do mouse não controla ciclo de vida; apenas executa ações da UI
+                self._handle_mouse_click(pygame.mouse.get_pos())
             elif event.type == pygame.KEYDOWN:
                 if not self._handle_keyboard_input(event.key):
                     return False
         return True
     
-    def _handle_mouse_click(self, pos: Tuple[int, int]) -> bool:
+    def _handle_mouse_click(self, pos: Tuple[int, int]) -> None:
         """Processa cliques do mouse de forma organizada."""
         # Controles principais do algoritmo
         if self._handle_algorithm_controls(pos):
-            return True
+            return
         
         # Controles de mapa
         if self._handle_map_controls(pos):
-            return True
+            return
             
         # Controles de métodos
         if self._handle_method_controls(pos):
-            return True
+            return
         
         # Controles de configuração
         if self._handle_config_controls(pos):
-            return True
+            return
         
         # Input customizado
         if self.map_type == "custom":
             self.handle_custom_input(pos)
         
-        return True
     
     def _handle_algorithm_controls(self, pos: Tuple[int, int]) -> bool:
         """Lida com controles principais do algoritmo."""
@@ -433,6 +291,19 @@ class TSPGeneticAlgorithm:
             return True
         return False
     
+    def _handle_option_group(self, button_map: dict, attr_name: str, cache_attr: str, pos: Tuple[int, int], log_label: Optional[str] = None) -> bool:
+        """Manipula um grupo de botões que definem uma opção única (reduz complexidade)."""
+        for button_key, value in button_map.items():
+            if button_key in self.buttons and self.buttons[button_key].collidepoint(pos):
+                current = getattr(self, attr_name)
+                if current != value:
+                    if log_label:
+                        self.logger.info(f"{log_label} alterado: {current} → {value}")
+                    setattr(self, attr_name, value)
+                    getattr(self, cache_attr).clear()
+                return True
+        return False
+
     def _handle_method_controls(self, pos: Tuple[int, int]) -> bool:
         """Lida com controles de métodos de seleção, crossover e mutação."""
         # Métodos de seleção
@@ -441,13 +312,8 @@ class TSPGeneticAlgorithm:
             'selection_tournament': 'tournament', 
             'selection_rank': 'rank'
         }
-        for button_key, method in selection_methods.items():
-            if button_key in self.buttons and self.buttons[button_key].collidepoint(pos):
-                if self.selection_method != method:
-                    self.logger.info(f"Método de seleção alterado: {self.selection_method} → {method}")
-                    self.selection_method = method
-                    self._selection_method_cache.clear()  # Limpar cache
-                return True
+        if self._handle_option_group(selection_methods, 'selection_method', '_selection_method_cache', pos, 'Método de seleção'):
+            return True
         
         # Métodos de mutação
         mutation_methods = {
@@ -455,12 +321,8 @@ class TSPGeneticAlgorithm:
             'mutation_inverse': 'inverse',
             'mutation_shuffle': 'shuffle'
         }
-        for button_key, method in mutation_methods.items():
-            if self.buttons[button_key].collidepoint(pos):
-                if self.mutation_method != method:
-                    self.mutation_method = method
-                    self._mutation_method_cache.clear()  # Limpar cache
-                return True
+        if self._handle_option_group(mutation_methods, 'mutation_method', '_mutation_method_cache', pos, 'Método de mutação'):
+            return True
         
         # Métodos de crossover
         crossover_methods = {
@@ -470,12 +332,8 @@ class TSPGeneticAlgorithm:
             'crossover_kpoint': 'kpoint',
             'crossover_erx': 'erx'
         }
-        for button_key, method in crossover_methods.items():
-            if self.buttons[button_key].collidepoint(pos):
-                if self.crossover_method != method:
-                    self.crossover_method = method
-                    self._crossover_method_cache.clear()  # Limpar cache
-                return True
+        if self._handle_option_group(crossover_methods, 'crossover_method', '_crossover_method_cache', pos, 'Método de crossover'):
+            return True
         
         return False
     
@@ -545,9 +403,21 @@ class TSPGeneticAlgorithm:
         self.fitness_history = []
         self.mean_fitness_history = []
         
-        # Limpar caches para novo algoritmo
-        self._clear_all_caches()
-        
+        # Atualizar contexto do engine e inicializar população
+        self.engine.population_size = self.population_size
+        self.engine.selection_method = self.selection_method
+        self.engine.crossover_method = self.crossover_method
+        self.engine.mutation_method = self.mutation_method
+        self.engine.elitism = self.elitism
+        self.engine.use_fleet = self.use_fleet
+        self.engine.current_generation = 0
+        self.engine.best_fitness = 0.0
+        self.engine.best_route = None
+        self.engine.fitness_history = []
+        self.engine.mean_fitness_history = []
+        self.engine.set_delivery_points(self.delivery_points)
+        self.engine.set_vrp_context(self.depot, self.fleet)
+        self.engine.clear_caches()
         self.initialize_population()
     
     def _clear_all_caches(self) -> None:

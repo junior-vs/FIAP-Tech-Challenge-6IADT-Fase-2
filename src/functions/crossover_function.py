@@ -1,4 +1,3 @@
-import re
 from typing import Tuple, Optional, List, Dict, Set
 import random
 
