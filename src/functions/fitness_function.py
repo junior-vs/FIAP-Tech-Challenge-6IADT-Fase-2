@@ -92,9 +92,24 @@ class FitnessFunction:
                 total_volume_cm3 += float(vol_cm3)
 
         # 3) Penalidades por exceder capacidades
-        # AS PENALIDADES AGORA USAM OS LIMITES DO VEÍCULO REAL (MAX_W, MAX_V)
-        weight_overshoot = max(0.0, total_weight_g - MAX_W)
-        volume_overshoot = max(0.0, total_volume_cm3 - MAX_V)
+        weight_overshoot = max(0.0, total_weight_g - FitnessFunction.MAX_WEIGHT)
+        volume_overshoot = max(0.0, total_volume_cm3 - FitnessFunction.MAX_VOLUME)
+
+        # Novo: logar motivo(s) da inviabilidade quando houver excedentes
+        if weight_overshoot > 0 or volume_overshoot > 0:
+            reasons = []
+            if weight_overshoot > 0:
+                reasons.append(
+                    f"peso excedido em {weight_overshoot:.1f} g (total {total_weight_g:.1f} g > máx {FitnessFunction.MAX_WEIGHT:.1f} g)"
+                )
+            if volume_overshoot > 0:
+                reasons.append(
+                    f"volume excedido em {volume_overshoot:.0f} cm³ (total {total_volume_cm3:.0f} cm³ > máx {FitnessFunction.MAX_VOLUME:.0f} cm³)"
+                )
+            FitnessFunction.logger.warning(
+                "Solução inviável. Aplicando penalidade. Motivo(s): %s",
+                "; ".join(reasons)
+            )
 
         weight_penalty = weight_overshoot * FitnessFunction.PENALTY_WEIGHT_FACTOR
         volume_penalty = volume_overshoot * FitnessFunction.PENALTY_VOLUME_FACTOR
@@ -607,19 +622,24 @@ class FitnessFunction:
             FitnessFunction._split_with_vehicle_choice(delivery_points, deposito, fleet)
         )
 
-        # Verificação de viabilidade da solução
+        # Se custo indica inviabilidade, logar motivo(s) antes de retornar
         if FitnessFunction._is_solution_infeasible(total_cost):
+            reasons = FitnessFunction._infer_infeasibility_reasons(
+                delivery_points=delivery_points,
+                deposito=deposito,
+                fleet=fleet,
+                usage=vehicle_usage if vehicle_usage else None,
+            )
             FitnessFunction.logger.warning(
-                "Solução inviável (autonomia/frota). Aplicando penalidade."
+                "Solução inviável (autonomia/frota). Motivo(s): %s. Aplicando penalidade.",
+                "; ".join(reasons) if reasons else "não determinado",
             )
             return 0.0, [], {}
 
-        # Log detalhado para debugging
         FitnessFunction._log_solution_details(
             total_cost, optimized_routes, vehicle_usage, priority_penalty
         )
 
-        # Cálculo do fitness (inversão para maximização)
         fitness = FitnessFunction._calculate_fitness_score(total_cost)
         return fitness, optimized_routes, vehicle_usage
 
@@ -645,3 +665,60 @@ class FitnessFunction:
     def _calculate_fitness_score(total_cost: float) -> float:
         """Calcula o score de fitness invertendo o custo (maior fitness = melhor solução)."""
         return 1.0 / total_cost if total_cost > 0 else 0.0
+
+    @staticmethod
+    def _infer_infeasibility_reasons(
+        delivery_points: List[DeliveryPoint],
+        deposito: DeliveryPoint,
+        fleet: List[VehicleType],
+        usage: Optional[Dict[str, int]] = None,
+    ) -> List[str]:
+        """
+        Deduz razões prováveis para uma solução inviável de VRP.
+
+        Regras:
+        - Se houver uso de veículos e o limite global estiver configurado, acusa excesso.
+        - Se não for excesso global, verifica autonomia: pontos cuja ida-e-volta
+          (depósito -> ponto -> depósito) excedem a autonomia máxima disponível.
+        - Considera também casos de frota vazia ou autonomia máxima não positiva.
+
+        Retorna:
+            Lista de mensagens de motivo para logging.
+        """
+        reasons: List[str] = []
+
+        # 1) Limite global de veículos excedido
+        max_allowed = FitnessFunction.MAX_VEHICLES_TOTAL
+        if usage and max_allowed is not None:
+            total_used = sum(usage.values())
+            if total_used > max_allowed:
+                reasons.append(
+                    f"limite global de veículos excedido (usado={total_used}, limite={max_allowed})"
+                )
+
+        # 2) Frota vazia ou autonomia inválida
+        if not fleet:
+            reasons.append("frota vazia (nenhum veículo disponível)")
+            return reasons
+
+        max_autonomy = max((v.autonomy for v in fleet), default=0.0)
+        if max_autonomy <= 0:
+            reasons.append("autonomia máxima da frota é zero ou negativa")
+            return reasons
+
+        # 3) Autonomia insuficiente para pontos individuais (segmentos mínimos)
+        #    Se qualquer ponto isolado requer roundtrip acima da autonomia máxima, é inviável.
+        offending: List[float] = []
+        for dp in delivery_points:
+            dist = FitnessFunction._roundtrip_distance([dp], deposito)
+            if dist > max_autonomy:
+                offending.append(dist)
+
+        if offending:
+            worst = max(offending)
+            reasons.append(
+                f"{len(offending)} ponto(s) sem veículo com autonomia suficiente "
+                f"(maior distância necessária={worst:.1f} km, autonomia máx={max_autonomy:.1f} km)"
+            )
+
+        return reasons

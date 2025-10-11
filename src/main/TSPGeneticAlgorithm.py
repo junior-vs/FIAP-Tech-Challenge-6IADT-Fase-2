@@ -6,7 +6,7 @@ from src.domain.delivery_point import DeliveryPoint
 from src.functions.draw_functions import DrawFunctions
 from src.functions.fitness_function import FitnessFunction
 from src.functions.ui_layout import UILayout
-from src.functions.app_logging import get_logger
+from src.functions.app_logging import get_logger, log_performance, configurar_logging
 from src.domain.product import Product
 from src.domain.vehicle import VehicleType, default_fleet
 
@@ -29,19 +29,6 @@ LIGHT_GRAY = UILayout.get_color('light_gray')
 
 
 class TSPGeneticAlgorithm:
-    @staticmethod
-    def log_performance(func):
-        """Decorator para medir e logar o tempo de execução de métodos críticos."""
-        import time
-        def wrapper(*args, **kwargs):
-            logger = get_logger(func.__module__)
-            start = time.perf_counter()
-            logger.debug(f"[PERF] Iniciando '{func.__name__}'")
-            result = func(*args, **kwargs)
-            elapsed = (time.perf_counter() - start) * 1000
-            logger.info(f"[PERF] '{func.__name__}' executado em {elapsed:.2f} ms")
-            return result
-        return wrapper
     
     def __init__(self):
         # Configurar logger para esta classe
@@ -78,7 +65,7 @@ class TSPGeneticAlgorithm:
         # --- VRP (múltipla frota) ---
         self.use_fleet = True
         self.fleet: List[VehicleType] = default_fleet()
-        self.depot: DeliveryPoint = None 
+        self.depot: Optional[DeliveryPoint] = None 
         # Limite global opcional de veículos (None para desativar)
         self.max_vehicles_total: Optional[int] = 5
 
@@ -537,6 +524,9 @@ class TSPGeneticAlgorithm:
         sys.exit()
 
 if __name__ == "__main__":
+    # Configurar sistema de logging ANTES de criar qualquer logger
+    configurar_logging()
+    
     # Criar logger para o módulo principal
     logger = get_logger(__name__)
     
