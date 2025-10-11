@@ -23,7 +23,22 @@ def _card(screen, x, y, w, h, title, font):
 
 
 class DrawFunctions:
-    """UI determinística (sem sobreposições)."""
+    """
+    Classe responsável por toda a renderização da interface gráfica do algoritmo genético TSP/VRP.
+    
+    Esta classe implementa o padrão Single Responsibility Principle (SRP) com métodos modulares
+    que separam claramente a lógica de negócio da apresentação visual.
+    
+    Características principais:
+    - Interface modular dividida em seções independentes
+    - Renderização eficiente usando Pygame
+    - Suporte completo a TSP e VRP com múltiplas rotas
+    - Visualização de prioridades e estatísticas em tempo real
+    
+    Dependências:
+    - pygame: Para renderização gráfica
+    - UILayout: Para configurações centralizadas de layout e cores
+    """
 
     # -------------------- MAPA À DIREITA --------------------
     @staticmethod
@@ -43,59 +58,108 @@ class DrawFunctions:
     # -------------------- GRÁFICO --------------------
     @staticmethod
     def draw_fitness_graph(app: Any) -> None:
+        """
+        Renderiza gráfico de evolução do fitness ao longo das gerações.
+        
+        O gráfico exibe duas linhas:
+        - Vermelha: Melhor fitness de cada geração (máximo)
+        - Verde: Fitness médio da população
+        
+        Características:
+        - Escala automática baseada nos valores min/max
+        - Tratamento robusto de casos extremos (dados insuficientes, valores iguais)
+        - Renderização eficiente com pygame.draw.lines
+        
+        Args:
+            app: Instância da aplicação contendo fitness_history e mean_fitness_history
+        """
         cp = UILayout.ControlPanel
         x = cp.X + cp.PAD
         w = cp.WIDTH - 2*cp.PAD
 
+        # Calcula área interna do gráfico (descontando bordas e título)
         inner_x = x + 8
         inner_y = cp.FITNESS_Y + 36 + 4
         inner_w = w - 16
         inner_h = cp.FITNESS_H - 36 - 16
 
+        # Desenha fundo do gráfico
         fr = pygame.Rect(inner_x, inner_y, inner_w, inner_h)
         pygame.draw.rect(app.screen, WHITE, fr)
         pygame.draw.rect(app.screen, BLACK, fr, 2)
 
+        # Validações de pré-condições
         if not hasattr(app, 'fitness_history') or len(app.fitness_history) < 2:
             return
         if not hasattr(app, 'mean_fitness_history'):
             app.mean_fitness_history = []
 
+        # Sincroniza arrays para mesmo tamanho
         n = min(len(app.fitness_history), len(app.mean_fitness_history))
         if n < 2:
             return
 
+        # Calcula escala baseada em min/max de ambas as séries
         vals = list(app.fitness_history[:n]) + list(app.mean_fitness_history[:n])
         vmin, vmax = min(vals), max(vals)
-        if vmax == vmin:
+        if vmax == vmin:  # Evita divisão por zero
             return
 
+        # Converte dados para coordenadas de tela
         pts_max, pts_mean = [], []
         for i in range(n):
+            # Distribui pontos uniformemente no eixo X
             x_pt = fr.x + (i / max(1, n - 1)) * (fr.width - 12) + 6
+            
+            # Mapeia valores para coordenadas Y (invertido pois tela tem origem no topo)
             y1 = fr.bottom - 6 - ((app.fitness_history[i]    - vmin) / (vmax - vmin)) * (fr.height - 12)
             y2 = fr.bottom - 6 - ((app.mean_fitness_history[i]- vmin) / (vmax - vmin)) * (fr.height - 12)
+            
             pts_max.append((x_pt, y1))
             pts_mean.append((x_pt, y2))
 
-        pygame.draw.lines(app.screen, RED,   False, pts_max, 2)
-        pygame.draw.lines(app.screen, GREEN, False, pts_mean, 2)
+        # Renderiza as linhas do gráfico
+        pygame.draw.lines(app.screen, RED,   False, pts_max, 2)   # Melhor fitness
+        pygame.draw.lines(app.screen, GREEN, False, pts_mean, 2)  # Fitness médio
 
     # -------------------- LATERAL ESQUERDA --------------------
     @staticmethod
     def draw_priority_slider(app):
+        """
+        Renderiza controle deslizante para ajuste de prioridade de produtos.
+        
+        O slider permite configurar percentual de prioridade que influencia:
+        - A geração de produtos com prioridade nos pontos de entrega
+        - A visualização destacada dos pontos prioritários
+        - O cálculo de fitness considerando prioridades
+        
+        Componentes visuais:
+        - Barra horizontal cinza como trilho
+        - Handle circular azul/branco como indicador
+        - Label textual mostrando percentual atual
+        
+        Args:
+            app: Instância da aplicação contendo priority_percentage e buttons
+        """
         rect = app.buttons['priority_slider']
-        # Slider bar
-        slider_x = rect.x + 120
-        slider_w = rect.width - 130
-        slider_y = rect.y + rect.height // 2
+        
+        # Calcula posições do slider (trilho horizontal)
+        slider_x = rect.x + 120  # Offset para label
+        slider_w = rect.width - 130  # Largura disponível para trilho
+        slider_y = rect.y + rect.height // 2  # Centro vertical
+        
+        # Desenha trilho do slider
         pygame.draw.line(app.screen, GRAY, (slider_x, slider_y), (slider_x + slider_w, slider_y), 4)
-        # Handle
-        pct = max(0, min(100, int(app.priority_percentage)))
+        
+        # Calcula posição do handle baseada no percentual (0-100%)
+        pct = max(0, min(100, int(app.priority_percentage)))  # Clamp entre 0-100
         handle_x = slider_x + int((pct / 100) * slider_w)
-        pygame.draw.circle(app.screen, BLUE, (handle_x, slider_y), 10)
-        pygame.draw.circle(app.screen, WHITE, (handle_x, slider_y), 7)
-        # Label
+        
+        # Desenha handle como círculo duplo (azul com centro branco)
+        pygame.draw.circle(app.screen, BLUE, (handle_x, slider_y), 10)   # Círculo externo
+        pygame.draw.circle(app.screen, WHITE, (handle_x, slider_y), 7)   # Círculo interno
+        
+        # Renderiza label com valor atual
         label = app.small_font.render(f"Priority %: {pct}", True, BLACK)
         app.screen.blit(label, (rect.x + 8, rect.y + 4))
 
@@ -152,41 +216,65 @@ class DrawFunctions:
 
     @staticmethod
     def _draw_run_section(app: Any, x: int, w: int) -> None:
-        """Desenha a seção de execução (Run) com KPIs e barra de progresso."""
+        """
+        Desenha a seção de execução (Run) com KPIs e barra de progresso.
+        
+        Esta seção exibe informações em tempo real sobre o estado da execução:
+        - Grid 2x2 de KPIs principais
+        - Barra de progresso visual das gerações
+        - Dados atualizados dinamicamente durante execução
+        
+        KPIs exibidos:
+        1. Número de cidades carregadas
+        2. Tamanho da população configurada  
+        3. Geração atual / Total de gerações
+        4. Melhor distância encontrada (inverso do fitness)
+        
+        Args:
+            app: Instância da aplicação contendo estado atual da execução
+            x: Posição X inicial da seção
+            w: Largura disponível para a seção
+        """
         cp = UILayout.ControlPanel
         _card(app.screen, x, cp.RUN_Y, w, cp.RUN_H, "Run", app.font)
         
         inner_x = x + 4
         inner_w = w - 8
         row_y = cp.RUN_Y + 36
-        bw = (inner_w - 10) // 2
+        bw = (inner_w - 10) // 2  # Largura de cada box (2 colunas com gap)
 
-        # KPIs em grid 2x2
+        # Define grid 2x2 para os KPIs
         kpi_rects = [
-            pygame.Rect(inner_x, row_y, bw, cp.KPI_H),
-            pygame.Rect(inner_x + bw + 10, row_y, bw, cp.KPI_H),
-            pygame.Rect(inner_x, row_y + cp.KPI_H + 8, bw, cp.KPI_H),
-            pygame.Rect(inner_x + bw + 10, row_y + cp.KPI_H + 8, bw, cp.KPI_H)
+            pygame.Rect(inner_x, row_y, bw, cp.KPI_H),                           # Top-left
+            pygame.Rect(inner_x + bw + 10, row_y, bw, cp.KPI_H),               # Top-right
+            pygame.Rect(inner_x, row_y + cp.KPI_H + 8, bw, cp.KPI_H),          # Bottom-left
+            pygame.Rect(inner_x + bw + 10, row_y + cp.KPI_H + 8, bw, cp.KPI_H) # Bottom-right
         ]
         
+        # Prepara textos dos KPIs com dados atuais
         kpi_texts = [
             f"Cities: {len(app.delivery_points)}",
             f"Population: {app.population_size}",
             f"Generation: {app.current_generation}/{app.max_generations}",
+            # Converte fitness (1/distância) de volta para distância
             f"Best Dist.: {(1/app.best_fitness):.2f}" if getattr(app,'best_fitness',0) else "Best Dist.: N/A"
         ]
         
+        # Renderiza cada KPI em seu respectivo box
         for rect, text in zip(kpi_rects, kpi_texts):
-            pygame.draw.rect(app.screen, LGRAY, rect, border_radius=4)
-            pygame.draw.rect(app.screen, GRAY, rect, 1, border_radius=4)
+            pygame.draw.rect(app.screen, LGRAY, rect, border_radius=4)  # Fundo claro
+            pygame.draw.rect(app.screen, GRAY, rect, 1, border_radius=4)  # Borda
             app.screen.blit(app.small_font.render(text, True, BLACK), (rect.x + 8, rect.y + 4))
 
-        # Barra de progresso
+        # Barra de progresso das gerações
         pct = (app.current_generation / app.max_generations) if getattr(app, 'max_generations', 0) else 0
         prog_rect = pygame.Rect(inner_x, kpi_rects[2].bottom + 14, inner_w, 10)
+        
+        # Fundo da barra
         pygame.draw.rect(app.screen, LGRAY, prog_rect, border_radius=4)
         pygame.draw.rect(app.screen, GRAY, prog_rect, 1, border_radius=4)
         
+        # Preenchimento proporcional ao progresso
         fill_rect = pygame.Rect(prog_rect.x, prog_rect.y, int(pct * prog_rect.width), prog_rect.height)
         pygame.draw.rect(app.screen, GREEN, fill_rect, border_radius=4)
 
@@ -397,17 +485,36 @@ class DrawFunctions:
     # -------------------- VRP (múltiplas rotas) --------------------
     @staticmethod
     def _palette() -> List[Tuple[int, int, int]]:
+        """
+        Retorna paleta de cores distintas para diferenciação visual de rotas.
+        
+        A paleta foi cuidadosamente selecionada para:
+        - Máximo contraste visual entre cores adjacentes
+        - Boa visibilidade sobre fundo claro
+        - Distinção clara mesmo para daltonismo comum
+        - Consistência com convenções de visualização científica
+        
+        Cores baseadas na paleta "tab10" do matplotlib, reconhecida
+        por sua eficácia em visualizações científicas.
+        
+        Returns:
+            Lista de 10 tuplas RGB representando cores distintas
+            
+        Note:
+            Para mais de 10 rotas, as cores são reutilizadas ciclicamente
+            usando operador módulo (%) no índice da rota.
+        """
         return [
-            (31, 119, 180),
-            (255, 127, 14),
-            (44, 160, 44),
-            (214, 39, 40),
-            (148, 103, 189),
-            (140, 86, 75),
-            (227, 119, 194),
-            (127, 127, 127),
-            (188, 189, 34),
-            (23, 190, 207),
+            (31, 119, 180),   # Azul
+            (255, 127, 14),   # Laranja  
+            (44, 160, 44),    # Verde
+            (214, 39, 40),    # Vermelho
+            (148, 103, 189),  # Roxo
+            (140, 86, 75),    # Marrom
+            (227, 119, 194),  # Rosa
+            (127, 127, 127),  # Cinza
+            (188, 189, 34),   # Verde-oliva
+            (23, 190, 207),   # Ciano
         ]
 
     @staticmethod
@@ -419,16 +526,49 @@ class DrawFunctions:
 
     @staticmethod
     def _route_distance(app: Any, r: Any, deposito: Any) -> float:
+        """
+        Calcula distância total de uma rota incluindo retorno ao depósito.
+        
+        A função suporta dois tipos de objetos de rota:
+        1. Rotas com método próprio de cálculo (distancia_roundtrip)
+        2. Rotas genéricas com lista de pontos de entrega
+        
+        Para rotas genéricas, calcula:
+        - Distância do depósito ao primeiro ponto
+        - Distâncias entre pontos consecutivos  
+        - Distância do último ponto de volta ao depósito
+        
+        Utiliza distância euclidiana: sqrt((x2-x1)² + (y2-y1)²)
+        
+        Args:
+            app: Instância da aplicação (não utilizada atualmente)
+            r: Objeto de rota contendo delivery_points ou método distancia_roundtrip
+            deposito: Ponto do depósito (origem/destino)
+            
+        Returns:
+            Distância total da rota como float, ou 0.0 se rota vazia
+        """
+        # Método preferencial: usa cálculo próprio da rota se disponível
         if hasattr(r, "distancia_roundtrip"):
             return r.distancia_roundtrip(deposito)
+            
+        # Fallback: calcula manualmente usando pontos de entrega
         seq = getattr(r, "delivery_points", None) or []
         if not seq:
             return 0.0
+            
         d = 0.0
+        
+        # Depósito → primeiro ponto
         d += ((deposito.x - seq[0].x)**2 + (deposito.y - seq[0].y)**2) ** 0.5
+        
+        # Pontos consecutivos
         for i in range(len(seq) - 1):
             d += ((seq[i].x - seq[i+1].x)**2 + (seq[i].y - seq[i+1].y)**2) ** 0.5
+            
+        # Último ponto → depósito
         d += ((seq[-1].x - deposito.x)**2 + (seq[-1].y - deposito.y)**2) ** 0.5
+        
         return d
 
     @staticmethod
@@ -543,31 +683,49 @@ class DrawFunctions:
     @staticmethod
     def _draw_route_lines(app: Any, routes: List[Any], depot: Any) -> List[Tuple[str, float, Tuple[int, int, int]]]:
         """
-        Desenha as linhas das rotas e retorna dados para a legenda.
+        Desenha as linhas das rotas VRP e coleta dados para a legenda.
         
+        Para cada rota:
+        1. Atribui uma cor única da paleta disponível
+        2. Constrói sequência completa: depósito → pontos → depósito
+        3. Renderiza linha contínua com a cor da rota
+        4. Calcula distância total da rota
+        5. Coleta dados para construção da legenda
+        
+        A função utiliza cores rotativas da paleta, garantindo que rotas sejam
+        visualmente distintas mesmo com muitas rotas simultâneas.
+        
+        Args:
+            app: Instância da aplicação com screen para renderização
+            routes: Lista de objetos de rota contendo delivery_points
+            depot: Ponto do depósito (origem/destino de todas as rotas)
+            
         Returns:
-            Lista de tuplas com (nome_veiculo, distancia, cor) para cada rota
+            Lista de tuplas (nome_veiculo, distancia, cor) para construção da legenda
         """
         color_palette = DrawFunctions._palette()
         legend_data = []
         
         for route_index, route in enumerate(routes):
+            # Atribui cor baseada no índice (rotativo na paleta)
             route_color = color_palette[route_index % len(color_palette)]
             delivery_sequence = getattr(route, "delivery_points", [])
             
-            if not delivery_sequence:
+            if not delivery_sequence:  # Pula rotas vazias
                 continue
                 
-            # Criar sequência completa: depot -> pontos -> depot
+            # Constrói sequência completa incluindo retorno ao depósito
+            # Formato: [depot] + [ponto1, ponto2, ...] + [depot]
             route_points = (
                 [(depot.x, depot.y)] + 
                 [(point.x, point.y) for point in delivery_sequence] + 
                 [(depot.x, depot.y)]
             )
             
+            # Renderiza linha contínua da rota com espessura 3px
             pygame.draw.lines(app.screen, route_color, False, route_points, 3)
             
-            # Coletar dados para legenda
+            # Coleta metadados para a legenda
             vehicle_name = getattr(route, "vehicle_type", "Vehicle")
             route_distance = DrawFunctions._route_distance(app, route, depot)
             legend_data.append((vehicle_name, route_distance, route_color))
@@ -581,94 +739,265 @@ class DrawFunctions:
         position: Tuple[int, int]
     ) -> Tuple[int, int]:
         """
-        Desenha a legenda das rotas.
+        Desenha legenda das rotas VRP com cores, nomes de veículos e distâncias.
         
+        A legenda é renderizada como um box com fundo branco contendo:
+        - Uma linha por rota com cor correspondente
+        - Nome do tipo de veículo
+        - Distância total da rota formatada
+        
+        Layout da legenda:
+        - Padding interno de 8px
+        - Altura de linha de 18px
+        - Largura mínima de 200px (ajustada ao conteúdo)
+        - Bordas arredondadas para consistência visual
+        
+        Args:
+            app: Instância da aplicação contendo fonts para renderização
+            legend_data: Lista de tuplas (nome_veiculo, distancia, cor)
+            position: Tupla (x, y) da posição superior-esquerda da legenda
+            
         Returns:
-            Tupla com (largura, altura) da legenda desenhada
+            Tupla (largura, altura) da legenda renderizada para posicionamento de outros elementos
         """
-        if not legend_data:
+        if not legend_data:  # Sem dados = sem legenda
             return (0, 0)
             
         left_x, top_y = position
         padding = 8
         line_height = 18
         
-        # Calcular dimensões necessárias
+        # Calcula largura necessária baseada no texto mais longo
         max_text_width = max(
             app.small_font.size(f"{name} — {distance:.1f}")[0] 
             for name, distance, _ in legend_data
         )
+        # Largura = texto + linha colorida (18px) + espaço (6px) + padding
         legend_width = max(200, max_text_width + 26 + 2 * padding)
         legend_height = padding + len(legend_data) * line_height + padding
         
-        # Desenhar fundo da legenda
+        # Desenha fundo da legenda com bordas arredondadas
         legend_rect = pygame.Rect(left_x, top_y, legend_width, legend_height)
-        pygame.draw.rect(app.screen, WHITE, legend_rect, border_radius=6)
-        pygame.draw.rect(app.screen, DGRAY, legend_rect, 1, border_radius=6)
+        pygame.draw.rect(app.screen, WHITE, legend_rect, border_radius=6)   # Fundo branco
+        pygame.draw.rect(app.screen, DGRAY, legend_rect, 1, border_radius=6)  # Borda cinza
         
-        # Desenhar cada item da legenda
+        # Renderiza cada item da legenda
         for index, (vehicle_name, distance, color) in enumerate(legend_data):
             item_y = top_y + padding + index * line_height
             
-            # Linha colorida
-            line_start = (left_x + padding, item_y + 9)
+            # Linha colorida representando a rota (18px de largura, 4px de espessura)
+            line_start = (left_x + padding, item_y + 9)        # Centro vertical da linha
             line_end = (left_x + padding + 18, item_y + 9)
             pygame.draw.line(app.screen, color, line_start, line_end, 4)
             
-            # Texto do item
+            # Texto: "Tipo_Veiculo — Distancia"
             item_text = app.small_font.render(f"{vehicle_name} — {distance:.1f}", True, BLACK)
-            app.screen.blit(item_text, (left_x + padding + 24, item_y))
+            app.screen.blit(item_text, (left_x + padding + 24, item_y))  # 24px = linha + espaço
             
-        return (legend_width, legend_height)
+    @staticmethod
+    def _draw_route_legend_fixed_width(
+        app: Any, 
+        legend_data: List[Tuple[str, float, Tuple[int, int, int]]], 
+        position: Tuple[int, int],
+        fixed_width: int
+    ) -> Tuple[int, int]:
+        """
+        Desenha legenda das rotas VRP com largura fixa especificada.
+        
+        Versão da legenda que aceita largura fixa, adequada para integrar 
+        ao painel de controle abaixo do gráfico de fitness.
+        
+        Args:
+            app: Instância da aplicação contendo fonts para renderização
+            legend_data: Lista de tuplas (nome_veiculo, distancia, cor)
+            position: Tupla (x, y) da posição superior-esquerda da legenda
+            fixed_width: Largura fixa da legenda em pixels
+            
+        Returns:
+            Tupla (largura_usada, altura) da legenda renderizada
+        """
+        if not legend_data:  # Sem dados = sem legenda
+            return (0, 0)
+            
+        left_x, top_y = position
+        padding = 8
+        line_height = 18
+        
+        # Usa largura fixa fornecida
+        legend_width = fixed_width
+        legend_height = padding + len(legend_data) * line_height + padding
+        
+        # Desenha fundo da legenda com bordas arredondadas
+        legend_rect = pygame.Rect(left_x, top_y, legend_width, legend_height)
+        pygame.draw.rect(app.screen, WHITE, legend_rect, border_radius=6)   # Fundo branco
+        pygame.draw.rect(app.screen, DGRAY, legend_rect, 1, border_radius=6)  # Borda cinza
+        
+        # Título da legenda
+        title_text = app.small_font.render("Route Legend", True, BLACK)
+        app.screen.blit(title_text, (left_x + padding, top_y + padding))
+        
+        # Linha separadora
+        sep_y = top_y + padding + 16
+        pygame.draw.line(app.screen, LGRAY, 
+                        (left_x + padding, sep_y), 
+                        (left_x + legend_width - padding, sep_y), 1)
+        
+        # Renderiza cada item da legenda (começando após o título)
+        for index, (vehicle_name, distance, color) in enumerate(legend_data):
+            item_y = sep_y + 6 + index * line_height
+            
+            # Linha colorida representando a rota (18px de largura, 4px de espessura)
+            line_start = (left_x + padding, item_y + 9)        # Centro vertical da linha
+            line_end = (left_x + padding + 18, item_y + 9)
+            pygame.draw.line(app.screen, color, line_start, line_end, 4)
+            
+            # Texto: "Tipo_Veiculo — Distancia" (truncado se necessário)
+            text_content = f"{vehicle_name} — {distance:.1f}"
+            max_text_width = legend_width - 32 - 2 * padding  # Espaço disponível para texto
+            
+            # Renderiza texto, truncando se necessário
+            item_text = app.small_font.render(text_content, True, BLACK)
+            if item_text.get_width() > max_text_width:
+                # Trunca o nome do veículo se necessário
+                truncated = f"{vehicle_name[:8]}... — {distance:.1f}"
+                item_text = app.small_font.render(truncated, True, BLACK)
+            
+            app.screen.blit(item_text, (left_x + padding + 24, item_y))  # 24px = linha + espaço
+            
+        # Ajusta altura para incluir título e separador
+        total_height = padding + 16 + 6 + len(legend_data) * line_height + padding
+        return (legend_width, total_height)
+
+    @staticmethod
+    def _draw_vrp_routes_panel(
+        app: Any,
+        routes: List[Any],
+        deposito: Any,
+        legend_data: List[Tuple[str, float, Tuple[int, int, int]]],
+        left: int,
+        top: int,
+        width: int,
+        usage: Dict[str, int] | None = None,
+    ) -> int:
+        """
+        Desenha um único card combinando o resumo VRP e a legenda de rotas.
+
+        O card segue o padrão visual dos demais (título + linha separadora) e contém:
+        - Resumo (Rotas, Custo/Distância total, Uso por tipo)
+        - Itens de legenda com cores das rotas e distância por veículo
+
+        Args:
+            app: Instância da aplicação
+            routes: Lista de rotas
+            deposito: Ponto do depósito
+            legend_data: Lista de tuplas (vehicle_name, distance, color)
+            left, top, width: Posição e largura do card
+            usage: Uso por tipo de veículo (opcional, sobrescreve cálculo)
+
+        Returns:
+            Altura total utilizada pelo card (para layout subsequente, se necessário)
+        """
+        PAD = 8
+        line_h = 18
+
+        # Estatísticas consolidadas (permite injetar usage externo)
+        total_dist, total_cost, _use, usage_txt = DrawFunctions._calculate_route_statistics(
+            app, routes, deposito, usage
+        )
+
+        # Altura do conteúdo: 3 linhas de resumo + espaço + N linhas de legenda + padding
+        summary_lines = 3
+        legend_lines = len(legend_data)
+        content_h = PAD + summary_lines * line_h + 8 + legend_lines * line_h + PAD
+        card_h = 36 + content_h  # 36px reservados ao título/linha do card
+
+        # Desenha o card padrão
+        _card(app.screen, left, top, width, card_h, "Routes", app.font)
+
+        # Área de conteúdo inicia após o título
+        cy = top + 36
+
+        # Linhas do resumo
+        line1 = app.small_font.render(f"Rotas: {len(routes)}", True, BLACK)
+        line2 = app.small_font.render(
+            f"Custo total: {total_cost:.1f}" if total_cost > 0 else f"Distância total: {total_dist:.1f}",
+            True, BLACK,
+        )
+        line3 = app.small_font.render(f"Uso por tipo: {usage_txt}", True, BLACK)
+
+        app.screen.blit(line1, (left + PAD, cy + PAD))
+        app.screen.blit(line2, (left + PAD, cy + PAD + line_h))
+        app.screen.blit(line3, (left + PAD, cy + PAD + 2 * line_h))
+
+        # Posição inicial dos itens da legenda (após um pequeno espaçamento)
+        ly = cy + PAD + 3 * line_h + 8
+        for vehicle_name, distance, color in legend_data:
+            # Linha colorida (18px de largura) e texto descritivo
+            line_start = (left + PAD, ly + 9)
+            line_end = (left + PAD + 18, ly + 9)
+            pygame.draw.line(app.screen, color, line_start, line_end, 4)
+
+            text = app.small_font.render(f"{vehicle_name} — {distance:.1f}", True, BLACK)
+            app.screen.blit(text, (left + PAD + 24, ly))
+
+            ly += line_h
+
+        return card_h
 
     @staticmethod
     def draw_routes_vrp(app: Any, routes: List[Any], deposito: Any, show_legend: bool = True) -> None:
         """
-        Desenha a solução completa do VRP com rotas, legenda e resumo.
+        Renderiza solução completa do VRP com múltiplas rotas, legenda e resumo estatístico.
+        
+        Este é o método principal para visualização de soluções VRP, coordenando
+        a renderização de todos os componentes visuais necessários:
+        
+        Sequência de renderização:
+        1. Pontos de entrega (círculos numerados)
+        2. Linhas das rotas (cores distintas por veículo)
+        3. Depósito (quadrado amarelo destacado)
+        4. Legenda (opcional) - posicionada abaixo do gráfico de fitness
+        5. Resumo estatístico (opcional) - abaixo da legenda
+        
+        A renderização segue uma ordem específica para garantir que elementos
+        importantes (depósito, legenda) apareçam adequadamente organizados.
         
         Args:
-            app: Instância da aplicação com screen e delivery_points
-            routes: Lista de rotas a serem desenhadas
-            deposito: Ponto do depósito
-            show_legend: Se deve mostrar a legenda das rotas
+            app: Instância da aplicação com screen, delivery_points e fonts
+            routes: Lista de objetos Route contendo delivery_points e vehicle_type
+            deposito: Objeto Point representando o depósito central
+            show_legend: Se deve renderizar legenda e resumo (padrão: True)
         """
-        if not routes:
+        if not routes:  # Sem rotas = sem renderização
             return
             
-        # 1. Desenhar pontos de entrega
+        # 1. Renderiza pontos de entrega como base da visualização
         DrawFunctions._draw_delivery_points(app)
         
-        # 2. Desenhar linhas das rotas e coletar dados da legenda
+        # 2. Desenha rotas e coleta dados para legenda
+        # Retorna lista de (nome_veiculo, distancia, cor) para cada rota
         legend_data = DrawFunctions._draw_route_lines(app, routes, deposito)
         
-        # 3. Desenhar depósito
+        # 3. Desenha depósito sobre as rotas para destacá-lo
         DrawFunctions.draw_depot(app, deposito)
         
-        # 4. Desenhar legenda e resumo se solicitado
+        # 4. Renderiza painel combinado (Resumo + Legenda) se solicitado
         if show_legend and legend_data:
-            map_area = UILayout.MapArea
-            legend_position = (
-                map_area.CITIES_X + 8,
-                map_area.CITIES_Y + 8
-            )
-            
-            legend_width, legend_height = DrawFunctions._draw_route_legend(
-                app, legend_data, legend_position
-            )
-            
-            # 5. Desenhar resumo abaixo da legenda
+            cp = UILayout.ControlPanel
+            left = cp.X + cp.PAD
+            top = cp.FITNESS_Y + cp.FITNESS_H + 12
+            width = cp.WIDTH - 2 * cp.PAD
+
             usage = getattr(getattr(app, "best_route", None), "vehicle_usage", None)
-            summary_position = (
-                legend_position[0],
-                legend_position[1] + legend_height + 12
-            )
-            
-            DrawFunctions.draw_vrp_summary(
-                app, routes, deposito,
+            DrawFunctions._draw_vrp_routes_panel(
+                app=app,
+                routes=routes,
+                deposito=deposito,
+                legend_data=legend_data,
+                left=left,
+                top=top,
+                width=width,
                 usage=usage,
-                left=summary_position[0],
-                top=summary_position[1],
-                width=legend_width
             )
 
 
@@ -679,5 +1008,23 @@ class DrawFunctions:
     # -------------------- Shell principal --------------------
     @staticmethod
     def draw(app: Any) -> None:
-        DrawFunctions._draw_map_board(app)
-        DrawFunctions.draw_interface(app)
+        """
+        Método shell principal que coordena a renderização completa da interface.
+        
+        Este é o ponto de entrada para toda a renderização da aplicação,
+        chamado a cada frame do loop principal do pygame.
+        
+        Ordem de renderização:
+        1. Área do mapa (fundo, grade, bordas)
+        2. Interface de controle (painel esquerdo completo)
+        
+        A ordem é importante para garantir que elementos da interface
+        apareçam sobre o fundo do mapa, mantendo a hierarquia visual adequada.
+        
+        Args:
+            app: Instância principal da aplicação contendo:
+                - screen: Surface do pygame para renderização
+                - Todos os estados e configurações necessários
+        """
+        DrawFunctions._draw_map_board(app)  # Renderiza área do mapa primeiro (fundo)
+        DrawFunctions.draw_interface(app)   # Renderiza interface por cima
