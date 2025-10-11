@@ -203,6 +203,58 @@ class GeneticEngine:
             new_population.extend([child1, child2])
         self.population = new_population[: self.population_size]
 
+    def _log_end_of_generation(self, fitness_scores: List[float], results: Optional[List]) -> None:
+        """Loga um resumo em INFO ao final da geração atual."""
+        try:
+            gen = self.current_generation
+            best_fit = max(fitness_scores) if fitness_scores else 0.0
+            mean_fit = self.mean_fitness_history[-1] if self.mean_fitness_history else 0.0
+            if self.use_fleet and results:
+                self._log_vrp_generation(gen, best_fit, mean_fit, fitness_scores, results)
+            else:
+                self._log_tsp_generation(gen, best_fit, mean_fit)
+        except Exception as e:
+            self.logger.debug("Falha ao logar resumo da geração: %s", e, exc_info=True)
+
+    def _log_vrp_generation(
+        self,
+        gen: int,
+        best_fit: float,
+        mean_fit: float,
+        fitness_scores: List[float],
+        results: List,
+    ) -> None:
+        """Loga resumo de geração para VRP: rotas, uso de veículos e total versus limite."""
+        best_idx = fitness_scores.index(best_fit) if fitness_scores else 0
+        _, routes, usage = results[best_idx]
+        routes_count = len(routes) if routes else 0
+        total_used = sum(usage.values()) if usage else 0
+        cap = FitnessFunction.MAX_VEHICLES_TOTAL
+        cap_str = f"/{cap}" if cap is not None else ""
+        self.logger.info(
+            "Geração %d: fitness_max=%.4f, fitness_média=%.4f, segmentos=%d, uso_veículos=%s, total_veículos=%d%s",
+            gen, best_fit, mean_fit, routes_count, usage, total_used, cap_str,
+        )
+
+    def _log_tsp_generation(self, gen: int, best_fit: float, mean_fit: float) -> None:
+        """Loga resumo de geração para TSP: fitness e distância da melhor rota quando disponível."""
+        best_dist = None
+        try:
+            if self.best_route and hasattr(self.best_route, "distancia_total"):
+                best_dist = float(self.best_route.distancia_total())
+        except Exception:
+            best_dist = None
+        if isinstance(best_dist, float):
+            self.logger.info(
+                "Geração %d: fitness_max=%.4f, fitness_média=%.4f, distancia_melhor=%.3f",
+                gen, best_fit, mean_fit, best_dist,
+            )
+        else:
+            self.logger.info(
+                "Geração %d: fitness_max=%.4f, fitness_média=%.4f",
+                gen, best_fit, mean_fit,
+            )
+
     # ---------- Configurações auxiliares ----------
     def set_max_vehicles_total(self, limit: Optional[int]) -> None:
         """Define limite global de veículos para avaliação de fitness."""
@@ -220,6 +272,8 @@ class GeneticEngine:
         self._update_history(fitness_scores)
         if self.current_generation % 10 == 0:
             self.logger.info(f"Checkpoint: geração {self.current_generation}")
+        # Log detalhado do final da geração
+        self._log_end_of_generation(fitness_scores, results)
         self._evolve(fitness_scores)
         self.current_generation += 1
         return fitness_scores, results

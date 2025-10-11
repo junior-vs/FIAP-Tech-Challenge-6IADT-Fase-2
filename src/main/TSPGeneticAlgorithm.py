@@ -1,4 +1,6 @@
 import sys
+import argparse
+import logging
 from typing import List, Tuple, Optional
 import pygame
 from src.functions.genetic_engine import GeneticEngine
@@ -91,6 +93,8 @@ class TSPGeneticAlgorithm:
         self._crossover_method_cache = {}
         self._mutation_method_cache = {}
         self._fitness_cache = {}
+        # Resultados da última geração (VRP): lista de tuplas (fitness, routes, usage)
+        self._last_results: Optional[List[Tuple[float, list, dict]]] = None
         
         self.logger.info("Aplicação inicializada com sucesso")
 
@@ -171,6 +175,8 @@ class TSPGeneticAlgorithm:
         self.fitness_history = self.engine.fitness_history
         self.mean_fitness_history = self.engine.mean_fitness_history
         self.current_generation = self.engine.current_generation
+        # Guardar resultados da geração corrente (antes do evolve), para desenhar rotas
+        self._last_results = results
         return fitness_scores, results
     
       
@@ -485,12 +491,16 @@ class TSPGeneticAlgorithm:
         if self.best_route and hasattr(self.best_route, "routes") and self.best_route.routes:
             DrawFunctions.draw_vrp_solution(self, self.best_route.routes, self.depot)
 
-        # Desenhar solução atual durante execução
-        if (self.population and self.running_algorithm and 
-            hasattr(self.population[0], 'fitness')):
-            current_best = max(self.population, key=lambda ind: getattr(ind, 'fitness', 0))
-            if hasattr(current_best, "routes") and current_best.routes:
-                DrawFunctions.draw_vrp_solution(self, current_best.routes, self.depot, show_legend=False)
+        # Desenhar melhor solução da geração corrente (antes do evolve)
+        if self.running_algorithm and self._last_results:
+            try:
+                # results: List[Tuple[fitness, routes, usage]]
+                best_tuple = max(self._last_results, key=lambda t: t[0])
+                gen_routes = best_tuple[1]
+                if gen_routes:
+                    DrawFunctions.draw_vrp_solution(self, gen_routes, self.depot, show_legend=False)
+            except Exception as e:
+                self.logger.debug(f"Falha ao desenhar rotas da geração atual: {e}")
     
     def _draw_tsp_visualization(self) -> None:
         """Desenha visualização para TSP simples."""
@@ -500,8 +510,8 @@ class TSPGeneticAlgorithm:
 
         # Desenhar rota atual durante execução
         if self.population and self.running_algorithm:
-            fitness_scores = [FitnessFunction.calculate_fitness_with_constraints(chrom) 
-                            for chrom in self.population]
+            fitness_scores = [FitnessFunction.calculate_fitness_tsp(chrom)
+                              for chrom in self.population]
             if fitness_scores:
                 best_idx = fitness_scores.index(max(fitness_scores))
                 current_best = self.population[best_idx]
@@ -523,15 +533,85 @@ class TSPGeneticAlgorithm:
         pygame.quit()
         sys.exit()
 
+
+def parse_arguments():
+    """
+    Processa argumentos da linha de comando para configurar o nível de logging.
+    
+    Suporta:
+    -debug, --debug: Define logging para DEBUG
+    -info, --info: Define logging para INFO (padrão)
+    -warning, --warning: Define logging para WARNING
+    -error, --error: Define logging para ERROR
+    
+    Returns:
+        Nível de logging apropriado (logging.DEBUG, INFO, WARNING, ERROR)
+    """
+    parser = argparse.ArgumentParser(
+        description='TSP Genetic Algorithm - Configuração de Logging',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Exemplos de uso:
+  python -m src.main.TSPGeneticAlgorithm --debug     # Logging DEBUG (muito detalhado)
+  python -m src.main.TSPGeneticAlgorithm --info      # Logging INFO (padrão)
+  python -m src.main.TSPGeneticAlgorithm --warning   # Logging WARNING (apenas avisos+)
+  python -m src.main.TSPGeneticAlgorithm --error     # Logging ERROR (apenas erros)
+        """
+    )
+    
+    # Grupo mutuamente exclusivo para níveis de log
+    log_group = parser.add_mutually_exclusive_group()
+    log_group.add_argument(
+        '-d', '--debug', 
+        action='store_true',
+        help='Ativar logging DEBUG (muito detalhado, inclui performance)'
+    )
+    log_group.add_argument(
+        '-i', '--info', 
+        action='store_true',
+        help='Ativar logging INFO (padrão, informações gerais)'
+    )
+    log_group.add_argument(
+        '-w', '--warning', 
+        action='store_true',
+        help='Ativar logging WARNING (apenas avisos e erros)'
+    )
+    log_group.add_argument(
+        '-e', '--error', 
+        action='store_true',
+        help='Ativar logging ERROR (apenas erros críticos)'
+    )
+    
+    args = parser.parse_args()
+    
+    # Determinar nível de logging baseado nos argumentos
+    if args.debug:
+        return logging.DEBUG
+    elif args.info:
+        return logging.INFO
+    elif args.warning:
+        return logging.WARNING
+    elif args.error:
+        return logging.ERROR
+    else:
+        # Padrão: INFO
+        return logging.INFO
+
 if __name__ == "__main__":
-    # Configurar sistema de logging ANTES de criar qualquer logger
-    configurar_logging()
+    # Processar argumentos de linha de comando para nível de logging
+    log_level = parse_arguments()
+    
+    # Configurar sistema de logging com nível especificado
+    configurar_logging(nivel_consola=log_level, nivel_ficheiro=logging.DEBUG)
     
     # Criar logger para o módulo principal
     logger = get_logger(__name__)
     
+    # Log inicial com nível configurado
+    level_name = logging.getLevelName(log_level)
+    logger.info(f"=== Início da Aplicação TSP Genetic Algorithm (Log Level: {level_name}) ===")
+    
     try:
-        logger.info("=== Início da Aplicação TSP Genetic Algorithm ===")
         app = TSPGeneticAlgorithm()
         app.run()
         

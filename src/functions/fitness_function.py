@@ -106,7 +106,7 @@ class FitnessFunction:
                 reasons.append(
                     f"volume excedido em {volume_overshoot:.0f} cm³ (total {total_volume_cm3:.0f} cm³ > máx {FitnessFunction.MAX_VOLUME:.0f} cm³)"
                 )
-            FitnessFunction.logger.warning(
+            FitnessFunction.logger.debug(
                 "Solução inviável. Aplicando penalidade. Motivo(s): %s",
                 "; ".join(reasons)
             )
@@ -614,7 +614,7 @@ class FitnessFunction:
         # Validação de entrada
         delivery_points = getattr(route, "delivery_points", None)
         if not delivery_points:
-            FitnessFunction.logger.warning("Rota vazia para cálculo com frota.")
+            FitnessFunction.logger.debug("Rota vazia para cálculo com frota.")
             return 0.0, [], {}
 
         # Otimização de rota com escolha de veículos
@@ -630,7 +630,7 @@ class FitnessFunction:
                 fleet=fleet,
                 usage=vehicle_usage if vehicle_usage else None,
             )
-            FitnessFunction.logger.warning(
+            FitnessFunction.logger.debug(
                 "Solução inviável (autonomia/frota). Motivo(s): %s. Aplicando penalidade.",
                 "; ".join(reasons) if reasons else "não determinado",
             )
