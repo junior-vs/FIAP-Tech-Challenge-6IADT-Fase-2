@@ -59,3 +59,70 @@ class DeliveryPoint:
     def __hash__(self) -> int:
         """Define o hash para que DeliveryPoint possa ser usado em sets e dicionários."""
         return hash((self.x, self.y))
+
+    @staticmethod
+    def create_depot(center_x: float, center_y: float) -> "DeliveryPoint":
+        """
+        Cria um ponto de depósito sem produto associado.
+        
+        Args:
+            center_x: Coordenada X do depósito
+            center_y: Coordenada Y do depósito
+            
+        Returns:
+            DeliveryPoint representando o depósito
+        """
+        return DeliveryPoint(center_x, center_y, product=None)
+
+    @classmethod
+    def generate_random_points(cls, num_points: int, min_x: int, max_x: int, 
+                              min_y: int, max_y: int, priority_percentage: float) -> List["DeliveryPoint"]:
+        """
+        Gera pontos de entrega aleatórios com produtos.
+        
+        Args:
+            num_points: Número de pontos a gerar
+            min_x, max_x: Limites X da área
+            min_y, max_y: Limites Y da área
+            priority_percentage: Porcentagem para prioridade de produtos
+            
+        Returns:
+            Lista de pontos de entrega gerados
+        """
+        import random
+        from product import Product
+        
+        points = []
+        for i in range(num_points):
+            x = random.randint(min_x, max_x)
+            y = random.randint(min_y, max_y)
+            product = Product.make_random_product(i, priority_percentage)
+            points.append(cls(x, y, product))
+        return points
+
+    @classmethod
+    def generate_circle_points(cls, num_points: int, center_x: float, center_y: float, 
+                              radius: float, priority_percentage: float) -> List["DeliveryPoint"]:
+        """
+        Gera pontos de entrega em formato circular.
+        
+        Args:
+            num_points: Número de pontos a gerar
+            center_x, center_y: Centro do círculo
+            radius: Raio do círculo
+            priority_percentage: Porcentagem para prioridade de produtos
+            
+        Returns:
+            Lista de pontos de entrega em círculo
+        """
+        import math
+        from product import Product
+        
+        points = []
+        for i in range(num_points):
+            angle = 2 * math.pi * i / num_points
+            x = center_x + radius * math.cos(angle)
+            y = center_y + radius * math.sin(angle)
+            product = Product.make_random_product(i, priority_percentage)
+            points.append(cls(int(x), int(y), product))
+        return points

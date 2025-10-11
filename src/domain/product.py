@@ -13,6 +13,52 @@ mesmas unidades recebidas.
 
 
 class Product:
+    @classmethod
+    def make_random_product(cls, idx: int, priority_percentage: float = 20) -> "Product":
+        """
+        Gera um produto válido de forma otimizada respeitando restrições.
+        Args:
+            idx: índice para nomeação.
+            priority_percentage: porcentagem de chance de prioridade (>0).
+        Returns:
+            Product válido.
+        """
+        import random
+        name = f"Produto-{idx}"
+        weight = random.randint(100, 10_000)
+        priority = (
+            round(random.uniform(0.1, 1.0), 2)
+            if random.random() < (priority_percentage / 100)
+            else 0.0
+        )
+        for _ in range(20):
+            a = random.uniform(5.0, 100.0)
+            b = random.uniform(5.0, min(100.0, 200.0 - a))
+            max_c = min(100.0, 200.0 - (a + b))
+            if max_c > 5.0:
+                c = random.uniform(5.0, max_c)
+                dims = [a, b, c]
+                random.shuffle(dims)
+                try:
+                    return cls(
+                        name=name,
+                        weight=weight,
+                        length=dims[0],
+                        width=dims[1],
+                        height=dims[2],
+                        priority=priority,
+                    )
+                except ValueError:
+                    continue
+        # Fallback garantido
+        return cls(
+            name=name,
+            weight=min(weight, 10_000),
+            length=80.0,
+            width=60.0,
+            height=50.0,
+            priority=priority,
+        )
 
     def __init__(self, name: str, weight: float, length: float, width: float, height: float, priority: float = 0.0):
         """

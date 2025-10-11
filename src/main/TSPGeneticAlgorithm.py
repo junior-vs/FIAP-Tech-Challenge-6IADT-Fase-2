@@ -1,7 +1,5 @@
 import sys
 from typing import List, Tuple
-import random
-import math
 import os
 import pygame
 import numpy as np
@@ -12,15 +10,16 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../func
 
 # Imports dos módulos do projeto
 from delivery_point import DeliveryPoint
-from draw_functions import DrawFunctions
 from route import Route
+from draw_functions import DrawFunctions
 from crossover_function import Crossover
 from mutation_function import Mutation
 from selection_functions import Selection
 from fitness_function import FitnessFunction
 from ui_layout import UILayout
-from app_logging import configurar_logging, get_logger
+from app_logging import get_logger
 from product import Product
+from population_factory import PopulationFactory
 
 try:
     from vehicle import VehicleType, default_fleet 
@@ -118,6 +117,9 @@ class TSPGeneticAlgorithm:
         self._mutation_method_cache = {}
         self._fitness_cache = {}
         
+        # Factory para população
+        self.population_factory = PopulationFactory()
+        
         self.logger.info("Aplicação inicializada com sucesso")
         self.fitness_history = []
         self.mean_fitness_history = []
@@ -136,59 +138,6 @@ class TSPGeneticAlgorithm:
         
         self.logger.info("Aplicação inicializada com sucesso")
 
-    def _make_random_product(self, idx: int) -> Product:
-        """Gera um produto válido de forma otimizada respeitando restrições.
-        
-        Otimizações:
-        - Reduzir tentativas desnecessárias
-        - Usar parâmetros pre-calculados
-        - Fallback mais eficiente
-        """
-        name = f"Produto-{idx}"
-        weight = random.randint(100, 10_000)
-        
-        # Usar porcentagem de prioridade definida na interface
-        priority = (round(random.uniform(0.1, 1.0), 2) 
-                   if random.random() < (self.priority_percentage / 100) 
-                   else 0.0)
-        
-        # Estratégia otimizada: tentar apenas 20 vezes em vez de 100
-        for _ in range(20):
-            # Gerar dimensões mais eficientemente
-            a = random.uniform(5.0, 100.0)
-            b = random.uniform(5.0, min(100.0, 200.0 - a))  # Já considera restrição
-            max_c = min(100.0, 200.0 - (a + b))
-            
-            if max_c > 5.0:
-                c = random.uniform(5.0, max_c)
-                dims = [a, b, c]
-                random.shuffle(dims)
-                
-                try:
-                    return Product(name=name, 
-                                 weight=weight,
-                                 length=dims[0], 
-                                 width=dims[1], 
-                                 height=dims[2], 
-                                 priority=priority)
-                except ValueError:
-                    continue
-        
-        # Fallback garantido que sempre funciona
-        return Product(name=name, 
-                      weight=min(weight, 10_000), 
-                      length=80.0, 
-                      width=60.0, 
-                      height=50.0, 
-                      priority=priority)
-
-    # -------------------- DEPÓSITO --------------------
-    def _compute_depot(self) -> DeliveryPoint:
-        """Define o depósito no centro da área do mapa."""
-        cx = UILayout.MapArea.CITIES_X + UILayout.MapArea.CITIES_WIDTH // 2
-        cy = UILayout.MapArea.CITIES_Y + UILayout.MapArea.CITIES_HEIGHT // 2
-        return DeliveryPoint(cx, cy, product=None)
-
     # -------------------- GERAÇÃO DE CIDADES --------------------
     def generate_cities(self, map_type: str, num_cities: int = 10):
         """Gera cidades baseado no tipo de mapa selecionado usando configurações centralizadas."""
@@ -196,46 +145,39 @@ class TSPGeneticAlgorithm:
         self.delivery_points = []
 
         if map_type == "random":
-            for i in range(num_cities):
-                x = random.randint(UILayout.MapArea.RANDOM_MIN_X, UILayout.MapArea.RANDOM_MAX_X)
-                y = random.randint(UILayout.MapArea.RANDOM_MIN_Y, UILayout.MapArea.RANDOM_MAX_Y)
-                prod = self._make_random_product(i)
-                self.delivery_points.append(DeliveryPoint(x, y, product=prod))
+            self.delivery_points = DeliveryPoint.generate_random_points(
+                num_cities,
+                UILayout.MapArea.RANDOM_MIN_X,
+                UILayout.MapArea.RANDOM_MAX_X,
+                UILayout.MapArea.RANDOM_MIN_Y,
+                UILayout.MapArea.RANDOM_MAX_Y,
+                self.priority_percentage
+            )
 
         elif map_type == "circle":
-            center_x = UILayout.MapArea.CIRCLE_CENTER_X
-            center_y = UILayout.MapArea.CIRCLE_CENTER_Y
-            radius = UILayout.MapArea.CIRCLE_RADIUS
-            for i in range(num_cities):
-                angle = 2 * math.pi * i / num_cities
-                x = center_x + radius * math.cos(angle)
-                y = center_y + radius * math.sin(angle)
-                prod = self._make_random_product(i)
-                self.delivery_points.append(DeliveryPoint(int(x), int(y), product=prod))
+            self.delivery_points = DeliveryPoint.generate_circle_points(
+                num_cities,
+                UILayout.MapArea.CIRCLE_CENTER_X,
+                UILayout.MapArea.CIRCLE_CENTER_Y,
+                UILayout.MapArea.CIRCLE_RADIUS,
+                self.priority_percentage
+            )
 
         elif map_type == "custom":
             self.logger.info("Modo customizado ativado - aguardando input do usuário")
 
         if self.delivery_points:
             self.calculate_distance_matrix()
-            self.depot = self._compute_depot()
+            cx = UILayout.MapArea.CITIES_X + UILayout.MapArea.CITIES_WIDTH // 2
+            cy = UILayout.MapArea.CITIES_Y + UILayout.MapArea.CITIES_HEIGHT // 2
+            self.depot = DeliveryPoint.create_depot(cx, cy)
             self.logger.info(f"Geradas {len(self.delivery_points)} cidades com sucesso")
     
-  #  @log_performance
     def initialize_population(self):
-        """Inicializa a população de forma otimizada."""
-        self.logger.info(f"Inicializando população de tamanho {self.population_size}")
-        
-        # Usar list comprehension para melhor performance
-        base = list(self.delivery_points)
-        self.population = []
-        
-        for _ in range(self.population_size):
-            shuffled = base.copy()  # Mais eficiente que base[:]
-            random.shuffle(shuffled)
-            self.population.append(Route(shuffled))
-        
-        self.logger.debug(f"População inicializada com {len(self.population)} rotas")
+        """Inicializa a população usando factory pattern."""
+        self.population = self.population_factory.create_initial_population(
+            self.delivery_points, self.population_size
+        )
     
   #  @log_performance
     def selection(self, population: List[Route], fitness_scores: List[float]) -> List[Route]:
@@ -415,11 +357,13 @@ class TSPGeneticAlgorithm:
         if self.map_type == "custom" and pos[0] > UILayout.MapArea.X:
             if (UILayout.MapArea.CITIES_X <= pos[0] <= UILayout.MapArea.CITIES_X + UILayout.MapArea.CITIES_WIDTH and
                 UILayout.MapArea.CITIES_Y <= pos[1] <= UILayout.MapArea.CITIES_Y + UILayout.MapArea.CITIES_HEIGHT):
-                prod = self._make_random_product(len(self.delivery_points))
+                prod = Product.make_random_product(len(self.delivery_points), self.priority_percentage)
                 self.delivery_points.append(DeliveryPoint(pos[0], pos[1], product=prod))
                 if len(self.delivery_points) > 1:
                     self.calculate_distance_matrix()
-                self.depot = self._compute_depot()
+                cx = UILayout.MapArea.CITIES_X + UILayout.MapArea.CITIES_WIDTH // 2
+                cy = UILayout.MapArea.CITIES_Y + UILayout.MapArea.CITIES_HEIGHT // 2
+                self.depot = DeliveryPoint.create_depot(cx, cy)
     
     def handle_events(self):
         """Gerencia eventos do pygame de forma otimizada."""
@@ -583,7 +527,9 @@ class TSPGeneticAlgorithm:
         
         # Garantir depósito
         if self.depot is None:
-            self.depot = self._compute_depot()
+            cx = UILayout.MapArea.CITIES_X + UILayout.MapArea.CITIES_WIDTH // 2
+            cy = UILayout.MapArea.CITIES_Y + UILayout.MapArea.CITIES_HEIGHT // 2
+            self.depot = DeliveryPoint.create_depot(cx, cy)
 
         self.logger.info(f"Iniciando algoritmo genético com {len(self.delivery_points)} cidades")
         self.logger.info(f"Configurações: população={self.population_size}, gerações={self.max_generations}")
@@ -742,9 +688,6 @@ class TSPGeneticAlgorithm:
         sys.exit()
 
 if __name__ == "__main__":
-    # Configurar sistema de logging usando módulo centralizado
-    configurar_logging()
-    
     # Criar logger para o módulo principal
     logger = get_logger(__name__)
     
