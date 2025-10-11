@@ -1,0 +1,18 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": ["period","totals"],
+  "properties": {
+    "period": {"type": "string"},
+    "totals": {"type": "object", "required": ["km"], "properties": {
+      "km": {"type": "number"},
+      "stops": {"type": ["number","null"]},
+      "time_min": {"type": ["number","null"]}
+    }},
+    "sla": {"type": ["object","null"], "properties": {
+      "critical_first_third_pct": {"type": ["number","null"]}
+    }},
+    "by_vehicle": {"type": ["array","null"], "items": {"type": "object"}},
+    "notes": {"type": ["array","null"], "items": {"type": "string"}}
+  }
+}

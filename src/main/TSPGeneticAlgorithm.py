@@ -1,3 +1,4 @@
+# src/main/TSPGeneticAlgorithm.py
 import sys
 from typing import List, Tuple
 import random
@@ -7,6 +8,7 @@ import pygame
 import numpy as np
 from datetime import datetime
 import json
+import re
 
 # Configurar paths para imports
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))  # adiciona 'src' ao sys.path
@@ -41,6 +43,77 @@ RED = UILayout.get_color("red")
 GREEN = UILayout.get_color("green")
 GRAY = UILayout.get_color("gray")
 LIGHT_GRAY = UILayout.get_color("light_gray")
+
+
+# =========================
+# Helpers de Normalização LLM
+# =========================
+def _extract_json_block(md: str):
+    """
+    Extrai o primeiro bloco JSON de um Markdown no formato ```json ... ``` .
+    Se não achar, tenta detectar JSON 'nu'.
+    """
+    if not isinstance(md, str):
+        return None
+    # bloco ```json ... ```
+    m = re.search(r"```json\s*(.*?)```", md, flags=re.S | re.I)
+    if m:
+        blob = m.group(1).strip()
+        try:
+            return json.loads(blob)
+        except Exception:
+            pass
+    # fallback: tenta achar um JSON no início
+    md_stripped = md.strip()
+    if md_stripped.startswith("{") or md_stripped.startswith("["):
+        try:
+            return json.loads(md_stripped)
+        except Exception:
+            # tenta heurística: do início até a primeira linha em branco dupla
+            parts = re.split(r"\n\s*\n", md_stripped, maxsplit=1)
+            try:
+                return json.loads(parts[0])
+            except Exception:
+                return None
+    return None
+
+
+def _strip_first_json_block(md: str) -> str:
+    """Remove o primeiro bloco ```json ... ``` do Markdown, se existir."""
+    if not isinstance(md, str):
+        return ""
+    return re.sub(r"^```json.*?```(\r?\n)?", "", md, flags=re.S | re.I)
+
+
+def _rebuild_md_with_json(obj: dict | list, tail_md: str) -> str:
+    """Reconstrói o Markdown com o JSON (normalizado) no topo e o restante do texto depois."""
+    try:
+        head = "```json\n" + json.dumps(obj, ensure_ascii=False, indent=2) + "\n```\n\n"
+    except Exception:
+        head = "```json\n{}\n```\n\n"
+    return head + (tail_md or "").lstrip()
+
+
+def _normalize_first_json(md: str, *, default_obj: dict, list_key: str) -> tuple[dict, str]:
+    """
+    Garante que o 1º bloco JSON do Markdown seja **objeto**.
+    - Se vier LISTA, embrulha em {list_key: lista}
+    - Se vier OBJETO, mantém
+    - Qualquer outra coisa → default_obj
+
+    Retorna (objeto_normalizado, markdown_normalizado).
+    """
+    parsed = _extract_json_block(md)
+    if isinstance(parsed, list):
+        obj = {list_key: parsed}
+    elif isinstance(parsed, dict):
+        obj = parsed
+    else:
+        obj = default_obj
+
+    tail = _strip_first_json_block(md)
+    md_norm = _rebuild_md_with_json(obj, tail)
+    return obj, md_norm
 
 
 class TSPGeneticAlgorithm:
@@ -82,7 +155,6 @@ class TSPGeneticAlgorithm:
         self.buttons = UILayout.Buttons.create_button_positions()
 
         # >>> Botão extra: Perguntar à IA
-        # Posiciona o botão no painel lateral (ajuste fino se desejar).
         side_x = UILayout.MapArea.X + UILayout.MapArea.WIDTH + 20
         side_y = UILayout.MapArea.Y + 320
         self.ask_btn_rect = pygame.Rect(side_x, side_y, 260, 40)
@@ -94,6 +166,10 @@ class TSPGeneticAlgorithm:
         self.llm = LLMServices()
         self.output_dir = os.path.join(os.getcwd(), "out")
         os.makedirs(self.output_dir, exist_ok=True)
+
+        # Flags por .env (mantidas para futuro uso)
+        self.llm_strict = os.getenv("LLM_STRICT") == "1"
+        self.llm_disable_cache = os.getenv("LLM_DISABLE_CACHE") == "1"
 
     def _make_random_product(self, idx: int) -> Product:
         """Gera um produto válido aleatório respeitando as restrições.
@@ -271,7 +347,6 @@ class TSPGeneticAlgorithm:
                     self.calculate_distance_matrix()
 
     # -------------------- Fluxo de Perguntas à IA --------------------
-
     def _ask_llm_flow(self):
         """Fluxo completo para pergunta em linguagem natural via botão/atalho."""
         snapshot = self._build_route_snapshot()
@@ -293,17 +368,22 @@ class TSPGeneticAlgorithm:
 
         self.logger.info(f"[LLM] Respondendo pergunta: {question}")
         try:
-            answer = self.llm.answer_natural_language(question, snapshot)
+            # Sem kwargs extras: LLMServices já lida com strict/cache via env
+            answer_md = self.llm.answer_natural_language(question, snapshot)
         except Exception as e:
             self.logger.error(f"[LLM] Erro ao obter resposta: {e}")
             return
 
+        # Normalização defensiva local
+        default_nlq = {"answer": "", "references": []}
+        nlq_obj, answer_md = _normalize_first_json(answer_md, default_obj=default_nlq, list_key="references")
+
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
         ans_path = os.path.join(self.output_dir, f"resposta_{ts}.md")
         with open(ans_path, "w", encoding="utf-8") as f:
-            f.write(f"# Pergunta\n{question}\n\n# Resposta\n{answer}\n")
+            f.write(f"# Pergunta\n{question}\n\n# Resposta\n{answer_md}\n")
         self.logger.info(f"[LLM] Resposta salva em: {ans_path}")
-        print("\n==== RESPOSTA DA IA ====\n" + answer + "\n=========================\n")
+        print("\n==== RESPOSTA DA IA ====\n" + answer_md + "\n=========================\n")
 
     def handle_events(self):
         """Gerencia eventos do pygame"""
@@ -399,11 +479,9 @@ class TSPGeneticAlgorithm:
 
                 # Atalho "R" para gerar relatórios e instruções
                 elif event.key == pygame.K_r:
-                    # Garantir que existe uma rota antes de gerar snapshot (fallback já existe dentro do snapshot)
                     self.logger.info("[LLM] Gerando relatório e instruções via Gemini...")
                     snapshot = self._build_route_snapshot()
 
-                    # Guard: se ainda assim não houver stops, evita chamada à LLM
                     if not snapshot.get("stops"):
                         self.logger.warning(
                             "[LLM] Snapshot sem 'stops'. Gere o mapa e/ou rode o algoritmo antes de apertar 'R'."
@@ -412,10 +490,32 @@ class TSPGeneticAlgorithm:
                     print(json.dumps(snapshot, indent=2, ensure_ascii=False))
 
                     try:
-                        instructions = self.llm.generate_driver_instructions(snapshot)
-                        report = self.llm.generate_period_report(
+                        # Sem kwargs extras: LLMServices já lida com strict/cache via env
+                        instructions_md = self.llm.generate_driver_instructions(snapshot)
+                        report_md = self.llm.generate_period_report(
                             {"snapshot": snapshot, "operation_date": snapshot.get("date", "")[:7]},  # mostra YYYY-MM
                             "Diário",
+                        )
+
+                        # Normalização defensiva local das duas saídas
+                        default_instr = {
+                            "vehicle_id": None,
+                            "checklist": ["Documentos", "EPIs", "Conferência de volumes"],
+                            "stops": [],
+                            "cautions": [],
+                            "summary": None
+                        }
+                        instr_obj, instructions_md = _normalize_first_json(
+                            instructions_md, default_obj=default_instr, list_key="stops"
+                        )
+
+                        default_report = {
+                            "period": "diário",
+                            "totals": {"km": 0.0, "stops": 0, "time_min": 0},
+                            "notes": []
+                        }
+                        report_obj, report_md = _normalize_first_json(
+                            report_md, default_obj=default_report, list_key="rows"
                         )
 
                         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -423,12 +523,13 @@ class TSPGeneticAlgorithm:
                         rep_path = os.path.join(self.output_dir, f"relatorio_{ts}.md")
 
                         with open(instr_path, "w", encoding="utf-8") as f:
-                            f.write(instructions)
+                            f.write(instructions_md)
                         with open(rep_path, "w", encoding="utf-8") as f:
-                            f.write(report)
+                            f.write(report_md)
 
                         self.logger.info(f"[LLM] Instruções salvas em: {instr_path}")
                         self.logger.info(f"[LLM] Relatório salvo em: {rep_path}")
+
                     except Exception as e:
                         self.logger.error(f"[LLM] Erro ao gerar instruções/relatório: {e}")
 
@@ -523,7 +624,7 @@ class TSPGeneticAlgorithm:
                     "notes": "Sem pontos para gerar snapshot.",
                 }
 
-            # 2) Construir stops ricos
+            # 2) Construir stops enxutos (para evitar bloqueios e reduzir tamanho do prompt)
             stops = []
             for i, p in enumerate(points):
                 prod = getattr(p, "product", None)
@@ -531,26 +632,21 @@ class TSPGeneticAlgorithm:
                 if prod:
                     prod_dict = {
                         "name": getattr(prod, "name", f"Item-{i+1}"),
-                        "weight_g": getattr(prod, "weight", None),
-                        "dimensions_cm": {
-                            "length": getattr(prod, "length", None),
-                            "width": getattr(prod, "width", None),
-                            "height": getattr(prod, "height", None),
-                        },
+                        "weight_g": int(getattr(prod, "weight", 0) or 0),
                         "cold_chain": False,
                     }
 
-                stops.append(
-                    {
-                        "order": i + 1,
-                        "coords": {"x": int(p.x), "y": int(p.y)},
-                        "address": f"Coordenada ({int(p.x)},{int(p.y)})",
-                        "priority": "Média",
-                        "time_window": "08:00-18:00",
-                        "items": [prod_dict] if prod_dict else [],
-                        "notes": "",
-                    }
-                )
+                stops.append({
+                    "order": i + 1,
+                    "coords": {"x": int(p.x), "y": int(p.y)},
+                    "priority": "Media",  # sem acento e sem termos “Crítica”
+                    "time_window": "08:00-18:00",
+                    "items": [prod_dict] if prod_dict else [],
+                })
+
+            # Limitar número de paradas enviadas à LLM (configurável por env)
+            max_stops = int(os.getenv("LLM_MAX_STOPS", "6"))
+            stops = stops[:max_stops]
 
             snapshot = {
                 "date": datetime.now().strftime("%Y-%m-%d"),
