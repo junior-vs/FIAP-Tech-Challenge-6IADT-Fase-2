@@ -55,6 +55,8 @@ class GeneticEngine:
         self._selection_method_cache = {}
         self._crossover_method_cache = {}
         self._mutation_method_cache = {}
+        # Limite global opcional de veículos
+        self.max_vehicles_total: Optional[int] = None
 
     # ---------- Config ----------
     def set_delivery_points(self, points: List[DeliveryPoint]) -> None:
@@ -152,7 +154,8 @@ class GeneticEngine:
                 ind.vehicle_usage = usage
         else:
             results = None
-            fitness_scores = [FitnessFunction.calculate_fitness_with_constraints(ind) for ind in self.population]
+            # Modo TSP: usar fitness simples de TSP
+            fitness_scores = [FitnessFunction.calculate_fitness_tsp(ind) for ind in self.population]
             for ind, fit in zip(self.population, fitness_scores):
                 ind.fitness = fit
                 if hasattr(ind, "routes"):
@@ -199,6 +202,12 @@ class GeneticEngine:
             child2 = self._mutate(child2)
             new_population.extend([child1, child2])
         self.population = new_population[: self.population_size]
+
+    # ---------- Configurações auxiliares ----------
+    def set_max_vehicles_total(self, limit: Optional[int]) -> None:
+        """Define limite global de veículos para avaliação de fitness."""
+        self.max_vehicles_total = limit
+        FitnessFunction.set_max_vehicles_total(limit)
 
     def run_generation(self) -> Tuple[List[float], Optional[List]]:
         """Executa uma geração completa do AG."""

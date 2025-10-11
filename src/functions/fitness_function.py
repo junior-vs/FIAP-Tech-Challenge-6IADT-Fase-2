@@ -27,6 +27,15 @@ class FitnessFunction:
     # Penalidade global para inviabilidade de frota/autonomia
     BIG_PENALTY = 1e12
 
+    # Limite global opcional de veículos (None = sem limite)
+    MAX_VEHICLES_TOTAL: Optional[int] = 5
+
+    @classmethod
+    def set_max_vehicles_total(cls, limit: Optional[int]) -> None:
+        """Define limite global de veículos usados na solução (None desativa)."""
+        cls.MAX_VEHICLES_TOTAL = limit
+        cls.logger.info(f"Limite global de veículos definido para: {limit}")
+
     @staticmethod
     @log_performance
     def calculate_fitness_with_constraints(
@@ -492,6 +501,18 @@ class FitnessFunction:
         # 2. Penalidade por prioridade tardia
         priority_penalty = FitnessFunction._calculate_priority_penalty(split_sequences)
         total_penalty += priority_penalty
+
+        # 3. Limite global de veículos: penaliza se exceder (se configurado)
+        max_allowed = FitnessFunction.MAX_VEHICLES_TOTAL
+        if max_allowed is not None:
+            total_used = sum(vehicle_usage.values()) if vehicle_usage else 0
+            if total_used > max_allowed:
+                excess = total_used - max_allowed
+                total_penalty += excess * FitnessFunction.BIG_PENALTY
+                FitnessFunction.logger.debug(
+                    "Penalidade por exceder limite global de veículos: usado=%d, limite=%d, excesso=%d",
+                    total_used, max_allowed, excess,
+                )
 
         return total_penalty, priority_penalty
 

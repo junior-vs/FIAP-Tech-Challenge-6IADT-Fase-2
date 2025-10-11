@@ -79,6 +79,8 @@ class TSPGeneticAlgorithm:
         self.use_fleet = True
         self.fleet: List[VehicleType] = default_fleet()
         self.depot: DeliveryPoint = None 
+        # Limite global opcional de veículos (None para desativar)
+        self.max_vehicles_total: Optional[int] = 5
 
         # Interface - usar layout centralizado
         self.ui_layout = UILayout()
@@ -95,6 +97,8 @@ class TSPGeneticAlgorithm:
             elitism=self.elitism,
             use_fleet=self.use_fleet,
         )
+        # Propaga limite global de veículos para o FitnessFunction via engine
+        self.engine.set_max_vehicles_total(self.max_vehicles_total)
         # Manter caches locais para compatibilidade com UI (limpeza via botões)
         self._selection_method_cache = {}
         self._crossover_method_cache = {}
@@ -391,6 +395,8 @@ class TSPGeneticAlgorithm:
         self.engine.set_delivery_points(self.delivery_points)
         self.engine.set_vrp_context(self.depot, self.fleet)
         self.engine.clear_caches()
+        # Garantir que o limite de veículos esteja aplicado ao iniciar
+        self.engine.set_max_vehicles_total(self.max_vehicles_total)
         self.initialize_population()
     
     def _clear_all_caches(self) -> None:
