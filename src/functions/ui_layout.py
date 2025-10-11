@@ -7,7 +7,7 @@ import pygame
 from typing import Dict, Tuple
 
 WIN_W = 1280
-WIN_H = 1000 # Ajustado para acomodar o gráfico de fitness (antes era 920)
+WIN_H = 1200 # Ajustado para acomodar o gráfico de fitness (antes era 920)
 
 class UILayout:
     WINDOW_WIDTH  = WIN_W
@@ -101,7 +101,6 @@ class UILayout:
 
             # --- Ajuste aqui: posicione o slider logo após o card de Setup ---
             priority_card_y = cp.PRIORITY_Y
-            priority_card_h = cp.PRIORITY_H
             slider_y = priority_card_y + 32  # 32px abaixo do topo do card, ajuste se necessário
             btns['priority_slider'] = pygame.Rect(x0, slider_y, w_inner, b.SMALL_H)
 
@@ -162,7 +161,7 @@ class UILayout:
         X = 12 + 360 + 12
         Y = 12
         WIDTH  = WIN_W - X - 12
-        HEIGHT = WIN_H - 24
+        HEIGHT = WIN_H - 445
 
         PAD = 24
         CITIES_X = X + PAD
