@@ -2,8 +2,8 @@ from typing import Tuple, Optional, List, Dict, Set
 import random
 
 from numpy import size
-from route import Route
-from delivery_point import DeliveryPoint
+from src.domain.route import Route
+from src.domain.delivery_point import DeliveryPoint
 
 # === ETAPA 1: IMPLEMENTAÇÃO DOS OPERADORES DE CROSSOVER ===
 

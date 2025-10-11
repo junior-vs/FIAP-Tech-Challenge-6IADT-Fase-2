@@ -1,6 +1,6 @@
 import pygame
 from typing import Any, Tuple, List, Dict
-from ui_layout import UILayout
+from src.functions.ui_layout import UILayout
 
 WHITE = UILayout.get_color('white')
 BLACK = UILayout.get_color('black')

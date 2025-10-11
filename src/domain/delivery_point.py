@@ -1,11 +1,13 @@
+import random
 import numpy as np
 from scipy.spatial.distance import euclidean
 import math
 from typing import List, TYPE_CHECKING
+        
 
 if TYPE_CHECKING:
-    # Import only for type checking to avoid any potential circular imports at runtime
-    from product import Product
+    # Type-only import to avoid cycles at runtime
+    from .product import Product
 
 class DeliveryPoint:
     def __init__(self, x: float, y: float, product: "Product"):
@@ -77,32 +79,32 @@ class DeliveryPoint:
     @classmethod
     def generate_random_points(cls, num_points: int, min_x: int, max_x: int, 
                               min_y: int, max_y: int, priority_percentage: float) -> List["DeliveryPoint"]:
-        """
-        Gera pontos de entrega aleatórios com produtos.
-        
-        Args:
-            num_points: Número de pontos a gerar
-            min_x, max_x: Limites X da área
-            min_y, max_y: Limites Y da área
-            priority_percentage: Porcentagem para prioridade de produtos
-            
-        Returns:
-            Lista de pontos de entrega gerados
-        """
-        import random
-        from product import Product
-        
-        points = []
-        for i in range(num_points):
+         
+         """
+         Gera pontos de entrega aleatórios com produtos.
+         
+         Args:
+             num_points: Número de pontos a gerar
+             min_x, max_x: Limites X da área
+             min_y, max_y: Limites Y da área
+             priority_percentage: Porcentagem para prioridade de produtos
+             
+         Returns:
+             Lista de pontos de entrega gerados
+         """
+   
+         from .product import Product  # local import to avoid circular dependency at runtime
+         points = []
+         for i in range(num_points):
             x = random.randint(min_x, max_x)
             y = random.randint(min_y, max_y)
             product = Product.make_random_product(i, priority_percentage)
             points.append(cls(x, y, product))
-        return points
+         return points
 
     @classmethod
     def generate_circle_points(cls, num_points: int, center_x: float, center_y: float, 
-                              radius: float, priority_percentage: float) -> List["DeliveryPoint"]:
+                               radius: float, priority_percentage: float) -> List["DeliveryPoint"]:
         """
         Gera pontos de entrega em formato circular.
         
@@ -115,8 +117,7 @@ class DeliveryPoint:
         Returns:
             Lista de pontos de entrega em círculo
         """
-        import math
-        from product import Product
+        from .product import Product  # local to avoid cycles
         
         points = []
         for i in range(num_points):

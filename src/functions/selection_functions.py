@@ -1,8 +1,8 @@
 import random
 from typing import List
 
-from route import Route
-from app_logging import log_performance, get_logger
+from src.domain.route import Route
+from src.functions.app_logging import log_performance, get_logger
 
 # Logger para este módulo
 logger = get_logger(__name__)

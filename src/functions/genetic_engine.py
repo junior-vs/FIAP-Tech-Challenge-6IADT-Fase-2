@@ -1,11 +1,11 @@
 from typing import List, Tuple, Optional
-from app_logging import get_logger
-from route import Route
-from delivery_point import DeliveryPoint
-from selection_functions import Selection
-from crossover_function import Crossover
-from mutation_function import Mutation
-from fitness_function import FitnessFunction
+from src.functions.app_logging import get_logger
+from src.domain.route import Route
+from src.domain.delivery_point import DeliveryPoint
+from src.functions.selection_functions import Selection
+from src.functions.crossover_function import Crossover
+from src.functions.mutation_function import Mutation
+from src.functions.fitness_function import FitnessFunction
 
 
 class GeneticEngine:

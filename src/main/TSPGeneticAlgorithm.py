@@ -1,42 +1,15 @@
 import sys
 from typing import List, Tuple, Optional
-import os
 import pygame
-import numpy as np
+from src.functions.genetic_engine import GeneticEngine
+from src.domain.delivery_point import DeliveryPoint
+from src.functions.draw_functions import DrawFunctions
+from src.functions.fitness_function import FitnessFunction
+from src.functions.ui_layout import UILayout
+from src.functions.app_logging import get_logger
+from src.domain.product import Product
+from src.domain.vehicle import VehicleType, default_fleet
 
-
-# Configurar paths para imports
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../domain')))
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../functions')))
-
-from genetic_engine import GeneticEngine
-# Imports dos módulos do projeto
-from delivery_point import DeliveryPoint
-from route import Route
-from draw_functions import DrawFunctions
-from crossover_function import Crossover
-from mutation_function import Mutation
-from selection_functions import Selection
-from fitness_function import FitnessFunction
-from ui_layout import UILayout
-from app_logging import get_logger
-from product import Product
-from population_factory import PopulationFactory
-
-try:
-    from src.domain.vehicle import VehicleType, default_fleet 
-except Exception:
-    class VehicleType:
-        def __init__(self, name: str, count: int, autonomy: float, cost_per_km: float = 1.0):
-            self.name = name
-            self.count = int(count)
-            self.autonomy = float(autonomy)
-            self.cost_per_km = float(cost_per_km)
-    def default_fleet():
-        return [
-            VehicleType("Moto", 5, 80.0, 1.0),
-            VehicleType("Van",  2, 250.0, 1.4)
-        ]
 
 # Inicializar pygame
 pygame.init()

@@ -1,1 +1,1 @@
-# src package initializer
+# src.domain package initializer

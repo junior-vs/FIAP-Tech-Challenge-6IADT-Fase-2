@@ -10,7 +10,7 @@ a list holding the ordered delivery points.
 """
 
 from typing import List, Iterator, Optional
-from delivery_point import DeliveryPoint
+from .delivery_point import DeliveryPoint
 import random
 
 

@@ -7,9 +7,9 @@ following the Factory pattern and Single Responsibility Principle.
 
 import random
 from typing import List
-from route import Route
-from delivery_point import DeliveryPoint
-from app_logging import get_logger
+from src.domain.route import Route
+from src.domain.delivery_point import DeliveryPoint
+from src.functions.app_logging import get_logger
 
 
 class PopulationFactory:

@@ -2,11 +2,10 @@
 from typing import List, Tuple, Dict, Optional
 from math import inf
 
-# Imports simplificados (assumindo que os arquivos estão no mesmo diretório)
-from app_logging import get_logger, log_performance
-from route import Route
-from vehicle import VehicleType
-from delivery_point import DeliveryPoint
+from src.functions.app_logging import get_logger, log_performance
+from src.domain.route import Route
+from src.domain.vehicle import VehicleType
+from src.domain.delivery_point import DeliveryPoint
 
 # ---------------------------------------------------------------------------------
 
