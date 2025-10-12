@@ -324,16 +324,48 @@ class TSPGeneticAlgorithm:
                 return True
         
         # Slider de prioridade
-        if self.buttons['priority_slider'].collidepoint(pos):
-            rect = self.buttons['priority_slider']
-            slider_x = rect.x + 120
-            slider_w = rect.width - 130
-            rel_x = min(max(pos[0] - slider_x, 0), slider_w)
-            pct = int((rel_x / slider_w) * 100)
-            self.priority_percentage = pct
+        if self._handle_priority_slider_control(pos):
+            return True
+
+        # Controles de Max Vehicles
+        if self._handle_max_vehicles_controls(pos):
             return True
         
         return False
+
+    def _handle_priority_slider_control(self, pos: Tuple[int, int]) -> bool:
+        """Manipula o slider de prioridade do card Priority."""
+        slider_rect = self.buttons.get('priority_slider')
+        if slider_rect and slider_rect.collidepoint(pos):
+            slider_x = slider_rect.x + 120
+            slider_w = slider_rect.width - 130
+            rel_x = min(max(pos[0] - slider_x, 0), slider_w)
+            self.priority_percentage = int((rel_x / slider_w) * 100)
+            return True
+        return False
+
+    def _handle_max_vehicles_controls(self, pos: Tuple[int, int]) -> bool:
+        """Manipula os botões -/+ do controle de Max Vehicles."""
+        minus_r = self.buttons.get('max_vehicles_minus')
+        plus_r = self.buttons.get('max_vehicles_plus')
+        handled = False
+        if minus_r and minus_r.collidepoint(pos):
+            cur = self.max_vehicles_total if self.max_vehicles_total not in (None, 0) else 20
+            new_val = max(1, int(cur) - 1)
+            self.max_vehicles_total = new_val
+            handled = True
+        elif plus_r and plus_r.collidepoint(pos):
+            cur = self.max_vehicles_total if self.max_vehicles_total not in (None, 0) else 20
+            new_val = int(cur) + 1
+            self.max_vehicles_total = None if new_val > 20 else new_val
+            handled = True
+
+        if handled:
+            # Propaga imediatamente para o engine/fitness
+            self.engine.set_max_vehicles_total(self.max_vehicles_total)
+            shown = '∞' if self.max_vehicles_total in (None, 0) else str(self.max_vehicles_total)
+            self.logger.info(f"Max vehicles atualizado: {shown}")
+        return handled
     
     def _handle_keyboard_input(self, key: int) -> bool:
         """Processa entrada do teclado."""

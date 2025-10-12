@@ -384,9 +384,41 @@ class DrawFunctions:
         
         # Priority Slider (card separado)
         priority_card_y = cp.SETUP_Y + cp.SETUP_H + 12
-        priority_card_h = 56
+        priority_card_h = cp.PRIORITY_H
         _card(app.screen, x, priority_card_y, w, priority_card_h, "Priority", app.font)
         DrawFunctions.draw_priority_slider(app)
+
+        # Linha adicional: controles de Max Vehicles
+        # Label
+        label_rect = app.buttons.get('max_vehicles_label')
+        if label_rect:
+            label_text = app.small_font.render("Max Vehicles:", True, BLACK)
+            app.screen.blit(label_text, (label_rect.x + 4, label_rect.y + 4))
+
+        # Botões - / + e display do valor atual
+        minus_r = app.buttons.get('max_vehicles_minus')
+        plus_r  = app.buttons.get('max_vehicles_plus')
+        disp_r  = app.buttons.get('max_vehicles_display')
+        if minus_r and plus_r and disp_r:
+            # Desenhar botões
+            btn_color = WHITE if not app.running_algorithm else LGRAY
+            pygame.draw.rect(app.screen, btn_color, minus_r, border_radius=4)
+            pygame.draw.rect(app.screen, BLACK, minus_r, 2, border_radius=4)
+            pygame.draw.rect(app.screen, btn_color, plus_r, border_radius=4)
+            pygame.draw.rect(app.screen, BLACK, plus_r, 2, border_radius=4)
+
+            minus_text = app.font.render("-", True, BLACK)
+            plus_text = app.font.render("+", True, BLACK)
+            app.screen.blit(minus_text, minus_text.get_rect(center=minus_r.center))
+            app.screen.blit(plus_text, plus_text.get_rect(center=plus_r.center))
+
+            # Display do valor atual (None => "∞")
+            pygame.draw.rect(app.screen, WHITE, disp_r, border_radius=4)
+            pygame.draw.rect(app.screen, BLACK, disp_r, 2, border_radius=4)
+            mv_val = getattr(app, 'max_vehicles_total', None)
+            mv_text = "∞" if mv_val in (None, 0) else str(int(mv_val))
+            mv_surf = app.small_font.render(mv_text, True, BLACK)
+            app.screen.blit(mv_surf, mv_surf.get_rect(center=disp_r.center))
         
         DrawFunctions._draw_run_section(app, x, w)
         DrawFunctions._draw_operators_section(app, x, w)
@@ -905,10 +937,15 @@ class DrawFunctions:
             app, routes, deposito, usage
         )
 
-        # Altura do conteúdo: 3 linhas de resumo + espaço + N linhas de legenda + padding
+        # Altura do conteúdo: 3 linhas de resumo + espaço + linhas de legenda + padding
         summary_lines = 3
         legend_lines = len(legend_data)
-        content_h = PAD + summary_lines * line_h + 8 + legend_lines * line_h + PAD
+        # Se houver muitas rotas, quebrar a legenda em duas colunas e contar linhas por coluna
+        if legend_lines > 5:
+            legend_rows = (legend_lines + 1) // 2
+        else:
+            legend_rows = legend_lines
+        content_h = PAD + summary_lines * line_h + 8 + legend_rows * line_h + PAD
         card_h = 36 + content_h  # 36px reservados ao título/linha do card
 
         # Desenha o card padrão
@@ -930,17 +967,57 @@ class DrawFunctions:
         app.screen.blit(line3, (left + PAD, cy + PAD + 2 * line_h))
 
         # Posição inicial dos itens da legenda (após um pequeno espaçamento)
-        ly = cy + PAD + 3 * line_h + 8
-        for vehicle_name, distance, color in legend_data:
-            # Linha colorida (18px de largura) e texto descritivo
-            line_start = (left + PAD, ly + 9)
-            line_end = (left + PAD + 18, ly + 9)
-            pygame.draw.line(app.screen, color, line_start, line_end, 4)
+        legend_top = cy + PAD + 3 * line_h + 8
+        if legend_lines <= 5:
+            # Uma coluna
+            ly = legend_top
+            for vehicle_name, distance, color in legend_data:
+                line_start = (left + PAD, ly + 9)
+                line_end = (left + PAD + 18, ly + 9)
+                pygame.draw.line(app.screen, color, line_start, line_end, 4)
 
-            text = app.small_font.render(f"{vehicle_name} — {distance:.1f}", True, BLACK)
-            app.screen.blit(text, (left + PAD + 24, ly))
+                text = app.small_font.render(f"{vehicle_name} — {distance:.1f}", True, BLACK)
+                app.screen.blit(text, (left + PAD + 24, ly))
+                ly += line_h
+        else:
+            # Duas colunas de largura igual
+            total_inner_w = width - 2 * PAD
+            col_w = (total_inner_w - PAD) // 2  # espaço de PAD entre colunas
+            left_col_x = left + PAD
+            right_col_x = left + PAD + col_w + PAD
+            rows = (legend_lines + 1) // 2
 
-            ly += line_h
+            # Função auxiliar para desenhar um item em uma coluna específica
+            def draw_legend_item(col_x: int, y: int, name: str, dist: float, col_color: Tuple[int, int, int]) -> None:
+                # Linha colorida
+                line_start = (col_x, y + 9)
+                line_end = (col_x + 18, y + 9)
+                pygame.draw.line(app.screen, col_color, line_start, line_end, 4)
+                # Texto com possível truncamento para caber na coluna
+                text_content = f"{name} — {dist:.1f}"
+                max_text_width = col_w - 24  # 24px após a linha colorida
+                rendered = app.small_font.render(text_content, True, BLACK)
+                if rendered.get_width() > max_text_width:
+                    # Trunca o nome mantendo o sufixo com distância
+                    trimmed_name = name
+                    # Heurística simples de truncamento
+                    while len(trimmed_name) > 0 and app.small_font.render(f"{trimmed_name}… — {dist:.1f}", True, BLACK).get_width() > max_text_width:
+                        trimmed_name = trimmed_name[:-1]
+                    text_content = f"{trimmed_name}… — {dist:.1f}"
+                    rendered = app.small_font.render(text_content, True, BLACK)
+                app.screen.blit(rendered, (col_x + 24, y))
+
+            for row in range(rows):
+                y = legend_top + row * line_h
+                # Esquerda
+                idx_left = row
+                name_l, dist_l, color_l = legend_data[idx_left]
+                draw_legend_item(left_col_x, y, name_l, dist_l, color_l)
+                # Direita (se houver)
+                idx_right = row + rows
+                if idx_right < legend_lines:
+                    name_r, dist_r, color_r = legend_data[idx_right]
+                    draw_legend_item(right_col_x, y, name_r, dist_r, color_r)
 
         return card_h
 

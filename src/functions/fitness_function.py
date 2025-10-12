@@ -91,20 +91,20 @@ class FitnessFunction:
                 vol_cm3 = length * width * height
                 total_volume_cm3 += float(vol_cm3)
 
-        # 3) Penalidades por exceder capacidades
-        weight_overshoot = max(0.0, total_weight_g - FitnessFunction.MAX_WEIGHT)
-        volume_overshoot = max(0.0, total_volume_cm3 - FitnessFunction.MAX_VOLUME)
+        # 3) Penalidades por exceder capacidades (usando limites do veículo)
+        weight_overshoot = max(0.0, total_weight_g - MAX_W)
+        volume_overshoot = max(0.0, total_volume_cm3 - MAX_V)
 
         # Novo: logar motivo(s) da inviabilidade quando houver excedentes
         if weight_overshoot > 0 or volume_overshoot > 0:
             reasons = []
             if weight_overshoot > 0:
                 reasons.append(
-                    f"peso excedido em {weight_overshoot:.1f} g (total {total_weight_g:.1f} g > máx {FitnessFunction.MAX_WEIGHT:.1f} g)"
+                    f"peso excedido em {weight_overshoot:.1f} g (total {total_weight_g:.1f} g > máx {MAX_W:.1f} g)"
                 )
             if volume_overshoot > 0:
                 reasons.append(
-                    f"volume excedido em {volume_overshoot:.0f} cm³ (total {total_volume_cm3:.0f} cm³ > máx {FitnessFunction.MAX_VOLUME:.0f} cm³)"
+                    f"volume excedido em {volume_overshoot:.0f} cm³ (total {total_volume_cm3:.0f} cm³ > máx {MAX_V:.0f} cm³)"
                 )
             FitnessFunction.logger.debug(
                 "Solução inviável. Aplicando penalidade. Motivo(s): %s",
@@ -325,8 +325,8 @@ class FitnessFunction:
 
             for j in range(i + 1, n + 1):
                 # Otimização: parar se distância já excede maior autonomia
-                segment_distance = get_cached_distance(i, j)
-                if segment_distance > max_autonomy:
+                segment_distance = float(get_cached_distance(i, j))
+                if segment_distance > float(max_autonomy):
                     break
 
                 # Encontrar veículo mais econômico para este segmento
@@ -364,7 +364,11 @@ class FitnessFunction:
     ) -> Tuple[Dict[Tuple[int, int], float], float]:
         """Configura otimizações para o algoritmo de programação dinâmica."""
         distance_cache = {}
-        max_autonomy = max((vehicle.autonomy for vehicle in fleet), default=0.0)
+        # Usar getattr para lidar com mocks sem atributo 'autonomy'
+        try:
+            max_autonomy = max((getattr(vehicle, 'autonomy', 0.0) for vehicle in fleet), default=0.0)
+        except Exception:
+            max_autonomy = 0.0
         return distance_cache, max_autonomy
 
     @staticmethod
@@ -394,8 +398,12 @@ class FitnessFunction:
         lowest_cost = inf
 
         for vehicle in fleet:
-            if distance <= vehicle.autonomy:
-                cost = vehicle.cost_per_km * distance
+            autonomy = getattr(vehicle, 'autonomy', None)
+            cost_per_km = getattr(vehicle, 'cost_per_km', None)
+            if autonomy is None or cost_per_km is None:
+                continue
+            if distance <= autonomy:
+                cost = cost_per_km * distance
                 if cost < lowest_cost:
                     lowest_cost = cost
                     best_vehicle = vehicle
@@ -701,7 +709,7 @@ class FitnessFunction:
             reasons.append("frota vazia (nenhum veículo disponível)")
             return reasons
 
-        max_autonomy = max((v.autonomy for v in fleet), default=0.0)
+        max_autonomy = max((getattr(v, 'autonomy', 0.0) for v in fleet), default=0.0)
         if max_autonomy <= 0:
             reasons.append("autonomia máxima da frota é zero ou negativa")
             return reasons

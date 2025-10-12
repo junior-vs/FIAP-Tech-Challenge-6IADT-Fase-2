@@ -41,7 +41,7 @@ class UILayout:
         SETUP_H      = 150
 
         PRIORITY_Y   = SETUP_Y + SETUP_H + 12
-        PRIORITY_H   = 56
+        PRIORITY_H   = 96  # Aumentado para acomodar controle de 'Max Vehicles' abaixo do slider de prioridade
 
         RUN_Y        = PRIORITY_Y + PRIORITY_H + 12
         RUN_H        = 130
@@ -99,10 +99,25 @@ class UILayout:
             btns['cities_plus']  = pygame.Rect(x0 + w_inner - b.TINY_W, y, b.TINY_W, b.TINY_H)
             y += b.TINY_H + b.GAP_Y
 
-            # --- Ajuste aqui: posicione o slider logo após o card de Setup ---
+            # --- PRIORITY CARD CONTROLS ---
+            # Slider de prioridade logo após o card de Setup
             priority_card_y = cp.PRIORITY_Y
             slider_y = priority_card_y + 32  # 32px abaixo do topo do card, ajuste se necessário
             btns['priority_slider'] = pygame.Rect(x0, slider_y, w_inner, b.SMALL_H)
+
+            # Controles de Max Vehicles (segunda linha do card de Priority)
+            # Layout: "Max Vehicles:" [ - ] [ valor ] [ + ]
+            mv_y = slider_y + b.SMALL_H + 6  # segunda linha dentro do card
+            label_w = 120
+            label_rect = pygame.Rect(x0, mv_y, label_w, b.SMALL_H)
+            btns['max_vehicles_label'] = label_rect  # apenas para posicionamento (não clicável)
+
+            # Botões - / + e display de valor
+            mv_controls_x = x0 + label_w + 6
+            btns['max_vehicles_minus'] = pygame.Rect(mv_controls_x, mv_y, b.TINY_W, b.TINY_H)
+            disp_w = 56
+            btns['max_vehicles_display'] = pygame.Rect(mv_controls_x + b.TINY_W + 8, mv_y, disp_w, b.TINY_H)
+            btns['max_vehicles_plus']  = pygame.Rect(mv_controls_x + b.TINY_W + 8 + disp_w + 8, mv_y, b.TINY_W, b.TINY_H)
 
             # ---------- OPERATORS ----------
             y = cp.OPERATORS_Y + 36
@@ -137,10 +152,13 @@ class UILayout:
             for i in range(b.FLEET_MAX_ROWS):
                 y_row = y + i * (b.SMALL_H + 6)
                 x = x0
-                btns[f'fleet_row{i}_name']     = pygame.Rect(x, y_row, name_w, b.SMALL_H); x += name_w + b.GAP_X
-                btns[f'fleet_row{i}_count']    = pygame.Rect(x, y_row, qty_w,  b.SMALL_H); x += qty_w  + b.GAP_X
-                btns[f'fleet_row{i}_autonomy'] = pygame.Rect(x, y_row, aut_w,  b.SMALL_H); x += aut_w  + b.GAP_X
-                btns[f'fleet_row{i}_cost']     = pygame.Rect(x, y_row, cost_w, b.SMALL_H)
+                btns[f'fleet_row{i}_name'] = pygame.Rect(x, y_row, name_w, b.SMALL_H)
+                x += name_w + b.GAP_X
+                btns[f'fleet_row{i}_count'] = pygame.Rect(x, y_row, qty_w, b.SMALL_H)
+                x += qty_w + b.GAP_X
+                btns[f'fleet_row{i}_autonomy'] = pygame.Rect(x, y_row, aut_w, b.SMALL_H)
+                x += aut_w + b.GAP_X
+                btns[f'fleet_row{i}_cost'] = pygame.Rect(x, y_row, cost_w, b.SMALL_H)
 
             # ---------- CROSSOVER ----------
             y = cp.CROSSOVER_Y + 36
