@@ -1,3 +1,28 @@
+"""
+Genetic Engine
+===============
+
+Camada de orquestração do Algoritmo Genético (AG), desacoplada da UI.
+
+Responsabilidades principais:
+- Manter população e parâmetros do AG
+- Executar seleção, crossover e mutação
+- Calcular fitness (TSP simples ou VRP com frota)
+- Rastrear melhor solução e histórico (melhor/ média por geração)
+- Logar resumos por geração para observabilidade
+
+Contrato (alto nível):
+- Entrada: uma população de rotas (Route) e contexto (pontos, frota, depósito)
+- Saída por geração: fitness_scores, e em VRP também detalhes por indivíduo (routes, usage)
+- Efeitos: atualiza best_route, best_fitness, fitness_history, mean_fitness_history e current_generation
+
+Observações de design:
+- Usa caches simples para funções de seleção/crossover/mutação, reduzindo condicionais repetitivas
+- Elitismo opcional: mantém o melhor indivíduo na nova população
+- Em VRP, o fitness retorna tuplas (fitness, routes, usage) por indivíduo
+- O limite global de veículos é enviado para a FitnessFunction via setter
+"""
+
 from typing import List, Tuple, Optional
 from src.functions.app_logging import get_logger
 from src.domain.route import Route
@@ -17,6 +42,11 @@ class GeneticEngine:
     - Executar seleção, crossover, mutação
     - Calcular fitness (TSP ou VRP com frota)
     - Rastrear melhor solução e histórico
+
+    Notas:
+    - Esta classe não desenha UI; ela apenas processa e registra logs.
+    - Para VRP, a avaliação delega à FitnessFunction.calculate_fitness_with_fleet.
+    - Para TSP, usa FitnessFunction.calculate_fitness_tsp.
     """
 
     def __init__(
@@ -60,19 +90,33 @@ class GeneticEngine:
 
     # ---------- Config ----------
     def set_delivery_points(self, points: List[DeliveryPoint]) -> None:
+        """Define a lista de pontos de entrega (genoma base).
+
+        Copiamos para evitar aliasing com a UI e manter imutabilidade interna.
+        """
         self.delivery_points = list(points)
 
     def set_vrp_context(self, depot: Optional[DeliveryPoint], fleet) -> None:
+        """Define o contexto VRP: depósito e frota de veículos.
+
+        depot: ponto central (origem/destino). fleet: lista de VehicleType.
+        """
         self.depot = depot
         self.fleet = fleet
 
     def clear_caches(self) -> None:
+        """Limpa caches de funções para refletir mudanças de métodos em runtime."""
         self._selection_method_cache.clear()
         self._crossover_method_cache.clear()
         self._mutation_method_cache.clear()
 
     # ---------- Operadores ----------
     def initialize_population(self) -> None:
+        """Inicializa população aleatória de permutações dos pontos.
+
+        - Embaralha a lista base N vezes (population_size) criando instâncias Route.
+        - Se não houver pontos, popula com lista vazia e loga aviso.
+        """
         if not self.delivery_points:
             self.logger.warning("Sem pontos de entrega para inicializar população")
             self.population = []
@@ -86,6 +130,13 @@ class GeneticEngine:
             self.population.append(Route(shuffled))
 
     def _select(self, population: List[Route], fitness_scores: List[float]) -> List[Route]:
+        """Seleciona nova população com o método configurado e aplica elitismo.
+
+        Observações:
+        - Usa cache para resolver a função de seleção (evita if/elif por frame).
+        - Se total_fitness==0, retorna cópia da população (sem viés).
+        - Elitismo: substitui último indivíduo pelo melhor atual.
+        """
         total_fitness = sum(fitness_scores)
         if total_fitness == 0:
             self.logger.warning("Total de fitness zero, copiando população.")
@@ -109,6 +160,10 @@ class GeneticEngine:
         return new_population
 
     def _crossover(self, parent1: Route, parent2: Route) -> Tuple[Route, Route]:
+        """Executa crossover retornando dois filhos conforme método configurado.
+
+        Usa cache para mapear o método a uma função concreta.
+        """
         if self.crossover_method not in self._crossover_method_cache:
             if self.crossover_method == "pmx":
                 self._crossover_method_cache[self.crossover_method] = Crossover.crossover_parcialmente_mapeado_pmx
@@ -129,6 +184,7 @@ class GeneticEngine:
         return self._crossover_method_cache[self.crossover_method](parent1, parent2)
 
     def _mutate(self, route: Route) -> Route:
+        """Aplica mutação à rota conforme método configurado (com cache)."""
         if self.mutation_method not in self._mutation_method_cache:
             if self.mutation_method == "swap":
                 self._mutation_method_cache[self.mutation_method] = Mutation.mutacao_por_troca
@@ -142,6 +198,15 @@ class GeneticEngine:
 
     # ---------- Execução de geração ----------
     def _calculate_fitness(self) -> Tuple[List[float], Optional[List]]:
+        """Calcula fitness para a população.
+
+        Retorno:
+        - fitness_scores: lista de floats (sempre)
+        - results (VRP): lista de tuplas (fitness, routes, usage) por indivíduo
+
+        Ramo VRP (use_fleet & depot & fleet): usa calculate_fitness_with_fleet
+        Ramo TSP: usa calculate_fitness_tsp e zera campos VRP do indivíduo
+        """
         if self.use_fleet and self.depot is not None and self.fleet is not None:
             results = [
                 FitnessFunction.calculate_fitness_with_fleet(ind, self.depot, self.fleet)
@@ -165,6 +230,12 @@ class GeneticEngine:
         return fitness_scores, results
 
     def _update_best(self, fitness_scores: List[float], results: Optional[List]) -> None:
+        """Atualiza best_fitness e best_route se houver melhoria.
+
+        - Copia o indivíduo para evitar efeitos colaterais nos próximos operadores.
+        - Em VRP, adiciona rotas e uso de veículos do melhor.
+        - Loga melhoria significativa (threshold ~10%).
+        """
         max_fitness = max(fitness_scores)
         if max_fitness > self.best_fitness:
             old = self.best_fitness
@@ -181,6 +252,7 @@ class GeneticEngine:
                 )
 
     def _update_history(self, fitness_scores: List[float]) -> None:
+        """Atualiza históricos de melhor e média da geração atual."""
         from numpy import mean
         max_fitness = max(fitness_scores)
         mean_fitness = float(mean(fitness_scores)) if fitness_scores else 0.0
@@ -188,6 +260,12 @@ class GeneticEngine:
         self.mean_fitness_history.append(mean_fitness)
 
     def _evolve(self, fitness_scores: List[float]) -> None:
+        """Realiza a evolução: seleção -> crossover -> mutação.
+
+        Observações:
+        - Gera filhos aos pares (child1, child2) e mantém tamanho da população.
+        - Usa rotação para pegar o segundo pai quando índice é o último.
+        """
         # Seleção
         self.population = self._select(self.population, fitness_scores)
 
@@ -204,7 +282,11 @@ class GeneticEngine:
         self.population = new_population[: self.population_size]
 
     def _log_end_of_generation(self, fitness_scores: List[float], results: Optional[List]) -> None:
-        """Loga um resumo em INFO ao final da geração atual."""
+        """Loga um resumo em INFO ao final da geração atual.
+
+        - Para VRP, inclui quantidade de segmentos, uso por tipo e total vs limite.
+        - Para TSP, inclui melhor e média e tenta a melhor distância.
+        """
         try:
             gen = self.current_generation
             best_fit = max(fitness_scores) if fitness_scores else 0.0
@@ -224,7 +306,11 @@ class GeneticEngine:
         fitness_scores: List[float],
         results: List,
     ) -> None:
-        """Loga resumo de geração para VRP: rotas, uso de veículos e total versus limite."""
+        """Loga resumo de geração para VRP: rotas, uso de veículos e total versus limite.
+
+        Escolhe o indivíduo com melhor fitness da geração atual e extrai
+        (routes, usage) do results para enriquecer o log.
+        """
         best_idx = fitness_scores.index(best_fit) if fitness_scores else 0
         _, routes, usage = results[best_idx]
         routes_count = len(routes) if routes else 0
@@ -257,12 +343,23 @@ class GeneticEngine:
 
     # ---------- Configurações auxiliares ----------
     def set_max_vehicles_total(self, limit: Optional[int]) -> None:
-        """Define limite global de veículos para avaliação de fitness."""
+        """Define limite global de veículos para avaliação de fitness.
+
+        Encaminha o valor para FitnessFunction (fonte única de verdade do cap).
+        """
         self.max_vehicles_total = limit
         FitnessFunction.set_max_vehicles_total(limit)
 
     def run_generation(self) -> Tuple[List[float], Optional[List]]:
-        """Executa uma geração completa do AG."""
+        """Executa uma geração completa do AG.
+
+        Passos:
+        1) Inicializa população se necessário
+        2) Calcula fitness e resultados (VRP opcional)
+        3) Atualiza best e históricos
+        4) Loga resumo da geração
+        5) Evolui população e incrementa o contador de gerações
+        """
         if not self.population:
             self.logger.warning("População vazia, inicializando...")
             self.initialize_population()
