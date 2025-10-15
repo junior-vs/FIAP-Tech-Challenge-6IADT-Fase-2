@@ -556,7 +556,7 @@ class TSPGeneticAlgorithm:
             return
 
         try:
-            question = input("Digite sua pergunta sobre a rota (ex.: 'Qual é a primeira parada prioritária?'): ").strip()
+            question = input("Digite sua pergunta sobre a rota: ").strip()
         except EOFError:
             question = ""
 
@@ -913,8 +913,8 @@ class TSPGeneticAlgorithm:
 
             # Desenho das rotas/cidades
             if self.delivery_points:
-                if self.best_route:
-                    DrawFunctions.draw_route(self, self.best_route, RED, 3)
+                # if self.best_route:
+                #     DrawFunctions.draw_route(self, self.best_route, RED, 3)
 
                 if self.population and self.running_algorithm:
                     fitness_scores = [
@@ -924,6 +924,33 @@ class TSPGeneticAlgorithm:
                         best_idx = fitness_scores.index(max(fitness_scores))
                         current_best = self.population[best_idx]
                         DrawFunctions.draw_route(self, current_best, BLUE, 2)
+
+                if self.use_fleet and self.depot is not None:
+                    DrawFunctions.draw_cities(self)
+                    DrawFunctions.draw_depot(self, self.depot)
+
+                    if self.best_route and hasattr(self.best_route, "routes") and self.best_route.routes:
+                        DrawFunctions.draw_vrp_solution(self, self.best_route.routes, self.depot)
+
+                    if self.population and self.running_algorithm and hasattr(self.population[0], 'fitness'):
+                        current_best = max(self.population, key=lambda ind: getattr(ind, 'fitness', 0))
+                        if hasattr(current_best, "routes") and current_best.routes:
+                            DrawFunctions.draw_vrp_solution(self, current_best.routes, self.depot, show_legend=False)
+
+                else:
+                    # if self.best_route:
+                    #     DrawFunctions.draw_route(self, self.best_route, RED, 3)
+
+                    if self.population and self.running_algorithm:
+                        fitness_scores = [FitnessFunction.calculate_fitness_with_constraints(chrom) for chrom in self.population]
+                        if fitness_scores:
+                            best_idx = fitness_scores.index(max(fitness_scores))
+                            current_best = self.population[best_idx]
+                            DrawFunctions.draw_route(self, current_best, BLUE, 2)
+
+                    DrawFunctions.draw_cities(self)
+
+            if self.map_type == "custom" and not self.delivery_points and hasattr(UILayout, "SpecialElements"):
 
                 DrawFunctions.draw_cities(self)
 
